@@ -1,0 +1,32 @@
+# Roblox place / model xuất ra từ Studio hoặc `rojo build`
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+*.rbxl.lock
+/build/
+
+# Sinh ra bởi công cụ
+sourcemap.json
+roblox.yml
+globalTypes*.d.luau
+
+# Rokit / Aftman cục bộ
+/.rokit/
+/.aftman/
+
+# Cài đặt cục bộ của Claude Code (CLAUDE.md và .claude/commands thì nên commit)
+.claude/settings.local.json
+
+# Hệ điều hành / trình soạn thảo
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+*.swp
+*.log
+
+# Bí mật (không bao giờ commit)
+.env
+.env.*
+*.key

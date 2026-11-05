@@ -1,0 +1,5 @@
+std = "roblox"
+
+[lints]
+# Các service dùng self ở dạng bảng singleton, không cần cảnh báo shadowing theo kiểu này.
+shadowing = "allow"

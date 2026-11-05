@@ -1,0 +1,8 @@
+# Rokit: trình quản lý công cụ cho Roblox. Chạy `rokit install` để cài tất cả.
+# https://github.com/rojo-rbx/rokit
+
+[tools]
+rojo = "rojo-rbx/rojo@7.7.1"
+selene = "Kampfkarren/selene@0.32.0"
+stylua = "JohnnyMorganz/stylua@2.6.0"
+luau-lsp = "JohnnyMorganz/luau-lsp@1.70.1"
