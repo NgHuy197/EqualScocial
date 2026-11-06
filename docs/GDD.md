@@ -1,8 +1,8 @@
 # Equal Social — Game Design Document
 
-Phiên bản tài liệu: 0.1 (khớp MVP v0.1) · Tên game tạm: **Equal Social** · AI cai quản: **AURA**
+Phiên bản tài liệu: 0.2 (khớp bản v0.2: MVP + trường học, đánh quái, bảng xếp hạng) · Tên game tạm: **Equal Social** · AI cai quản: **AURA**
 
-> Mọi con số trong tài liệu này là giá trị trong `src/shared/Config.luau`. Khi đổi số liệu, sửa Config **và** cập nhật bảng ở đây. Phần "Thiết kế các giai đoạn sau" (mục 6–8) là **bản nháp thiết kế**, chưa được cài đặt.
+> Mọi con số trong tài liệu này là giá trị trong `src/shared/Config.luau`. Khi đổi số liệu, sửa Config **và** cập nhật bảng ở đây. Mục 4 (MVP v0.1) và mục 6 (v0.2) **đã được cài đặt**; mục 7–8 (v0.3, v0.4) là **bản nháp thiết kế**, chưa được cài đặt.
 
 ## 1. Tầm nhìn
 
@@ -83,7 +83,7 @@ Không có bệnh tật, không mất kỹ năng, không mất đồ.
 ### 4.4 Tiền
 
 - Bắt đầu $100. Tối đa 1.000.000.000.000 (`MaxMoney`, chặn tràn số).
-- `EconomyService` là nơi **duy nhất** đổi tiền: `Add(player, amount, reason)`, `TrySpend(player, amount, reason)`, `TakePercent(player, percent, reason)`. `reason` hiện có: `job`, `shop`, `exhaustion`. Có `OnTransaction(callback)` để AURA đánh thuế/ghi log ở v0.3.
+- `EconomyService` là nơi **duy nhất** đổi tiền: `Add(player, amount, reason)`, `TrySpend(player, amount, reason)`, `TakePercent(player, percent, reason)`. `reason` hiện có: `job`, `shop`, `exhaustion` (v0.1) và `school`, `monster`, `defeat` (v0.2). Có `OnTransaction(callback)` để AURA đánh thuế/ghi log ở v0.3.
 - Số tiền luôn là số nguyên không âm.
 
 ### 4.5 Kỹ năng
@@ -150,7 +150,7 @@ Mở bằng ProximityPrompt (nhấn E, không cần giữ). Mua qua RemoteFuncti
 ### 4.10 Chống gian lận (đã áp dụng trong MVP)
 
 - Server tính tất cả; client chỉ hiển thị.
-- Mọi Remote: validate kiểu/độ dài, khoảng cách, rate-limit (`GetState` 4 lần/10 giây, `ShopBuy` 6 lần/3 giây).
+- Mọi Remote: validate kiểu/độ dài, khoảng cách, rate-limit (`GetState` 4 lần/10 giây, `ShopBuy` 6 lần/3 giây, `GetLeaderboard` 3 lần/10 giây).
 - Mọi ProximityPrompt: kiểm tra người chơi còn sống, khoảng cách (kèm dung sai 6 studs), cooldown theo người chơi.
 - Mua hàng: kiểm tra và ghi trong cùng một bước không yield nên không thể mua đúp bằng request song song.
 
@@ -163,29 +163,127 @@ Mở bằng ProximityPrompt (nhấn E, không cần giữ). Mua qua RemoteFuncti
 
 Có trong v0.1: DataService, chỉ số, tiền, 2 nghề, 2 kỹ năng, 3 trạm, 2 cửa hàng, Nổi tiếng, replication, HUD / toast / cửa sổ cửa hàng, map placeholder.
 
-Chưa có: trường học, quái, leaderboard, nhà/xe, AURA, PvP, Season, cosmetic bán bằng Robux, tương tác trực tiếp giữa người chơi (trao đổi, chat bubble tùy biến...).
+Có thêm trong v0.2 (xem mục 6): lịch trong game, 2 kỹ năng mới (Trí tuệ, Khéo tay), trường học 4 lớp, 2 nghề mở khóa theo level (Kỹ thuật viên, Quản lý), đánh quái ở Bãi luyện tập (Slime Kẹo, Gấu Bông, Bệnh xá), bảng xếp hạng tài sản (bảng 3D + panel UI + HUD).
 
-## 6. v0.2 — Học tập, đánh quái, bảng xếp hạng (bản nháp)
+Chưa có: nhà/xe, AURA, PvP, Season, cosmetic bán bằng Robux, tương tác trực tiếp giữa người chơi (trao đổi, chat bubble tùy biến...).
 
-### 6.1 Học skill ở trường
+## 6. v0.2 — Học tập, đánh quái, bảng xếp hạng (đã triển khai)
 
-- Trường học là khu vực có lớp học theo kỹ năng: Sức mạnh (phòng gym), Giao tiếp (lớp kỹ năng mềm), và kỹ năng mới (ví dụ *Trí tuệ*, *Khéo tay*).
-- Mỗi buổi học tốn **tiền + thời gian giữ/nhấn + nhu cầu** (Năng lượng, Độ no) và cho XP kỹ năng cao hơn làm nghề nhưng **không có lương** ⇒ đánh đổi "kiếm tiền ngay" và "đầu tư dài hạn".
-- Học phí tăng theo level (đề xuất: `học phí = 10 × (level + 1)`), có ngày học trong tuần theo lịch trong game để người chơi gặp nhau.
-- Một số nghề mới (ví dụ *Kỹ thuật viên*, *Quản lý*) mở khóa khi đạt level tối thiểu, giúp skill có ý nghĩa ngoài hệ số lương.
+Mọi số liệu dưới đây nằm trong `src/shared/Config.luau` (`Calendar`, `School`, `Classes`, `Jobs`, `Combat`, `Monsters`, `Leaderboard`).
 
-### 6.2 Đánh quái kiếm tiền
+### 6.1 Lịch trong game
 
-- Khu "Bãi luyện tập" có quái hoạt hình, không máu me, đánh bằng vũ khí cơ bản; sát thương phụ thuộc Sức mạnh, tốc độ phụ thuộc Năng lượng.
-- Quái hồi sinh theo lượt; phần thưởng là tiền + XP, giảm dần nếu nhiều người đánh cùng một quái (chống farm đông người) và có giới hạn thu nhập từ quái theo giờ (chống lạm phát).
-- Thua trận không bị "kiệt sức" mà chỉ mất một phần thời gian (hồi sinh tại bệnh xá, trả một khoản phí nhỏ); chỉ số Sức khỏe của hệ sinh tồn vẫn tách riêng với HP trong trận.
-- Đánh quái tốn Năng lượng, Độ no và tăng Căng thẳng nhiều hơn nghề thường.
+- **10 phút thực = 1 ngày game** (`Calendar.DayLengthSeconds = 600`), một tuần 7 ngày = 70 phút. Ngày 1 là Thứ Hai.
+- Ngày suy ra từ **giờ server** (`workspace:GetServerTimeNow()`), không lưu dữ liệu: mọi máy chủ và mọi người chơi luôn cùng một ngày, nên người chơi gặp nhau ở lớp học theo lịch.
+- HUD hiện dòng "Hôm nay: Thứ …" (client chỉ hiển thị; lớp mở hay đóng luôn do server quyết định).
 
-### 6.3 Bảng xếp hạng tài sản
+### 6.2 Kỹ năng
 
-- Chỉ số xếp hạng: **tài sản ròng = tiền + giá trị đồ sở hữu**. Dùng `OrderedDataStore`, cập nhật theo chu kỳ (mỗi vài phút) để tiết kiệm request.
-- Hiển thị top 50 theo mùa trên bảng 3D ở quảng trường + panel UI; người chơi luôn thấy hạng của mình.
-- Chống gian lận: tài sản chỉ tính từ dữ liệu server; người chơi nghi ngờ bất thường (tăng đột biến) bị đánh dấu để xem xét.
+| Kỹ năng | Học ở | Tác dụng |
+| --- | --- | --- |
+| Sức mạnh | Phòng gym, nghề Bốc vác, đánh quái | tăng lương Bốc vác, tăng sát thương khi đánh quái |
+| Giao tiếp | Lớp kỹ năng mềm, nghề Pha chế | tăng lương Pha chế; điều kiện mở khóa Quản lý |
+| **Trí tuệ** (mới) | Thư viện | tăng lương Quản lý; điều kiện mở khóa Quản lý |
+| **Khéo tay** (mới) | Xưởng thực hành | tăng lương Kỹ thuật viên; điều kiện mở khóa Kỹ thuật viên |
+
+Cùng đường cong XP (50 + 25 × level), tối đa level 20, +10% lương mỗi level. Người chơi cũ tự có thêm hai kỹ năng mới (reconcile).
+
+### 6.3 Trường học
+
+Mỗi buổi học = giữ phím 6 giây ở một lớp (ProximityPrompt). **Có lương? Không.** Đánh đổi: tốn tiền để lấy XP nhanh hơn làm nghề.
+
+| Lớp | Kỹ năng | Ngày mở | Năng lượng | Độ no | Sạch sẽ | Căng thẳng |
+| --- | --- | --- | --- | --- | --- | --- |
+| Phòng gym | Sức mạnh | T2, T4, T6 | −10 | −5 | −6 | +2 |
+| Lớp kỹ năng mềm | Giao tiếp | T3, T5, T7 | −6 | −3 | −1 | +3 |
+| Thư viện | Trí tuệ | T2, T3, T5, T6 | −8 | −4 | −1 | +4 |
+| Xưởng thực hành | Khéo tay | T4, T7, CN | −8 | −4 | −4 | +3 |
+
+- **Học phí = 10 × (level kỹ năng + 1)**, tính theo level lúc bắt đầu buổi học (`School.TuitionPerLevel`), trừ qua `EconomyService` (lý do `school`). Mỗi buổi cho **30 XP** (`School.XPPerLesson`).
+- Từ chối (không thu phí, báo ngay khi bắt đầu giữ phím và khi hoàn thành) nếu: lớp nghỉ hôm nay; Năng lượng dưới 15; không đủ học phí; kỹ năng đã tối đa.
+- Ngày nào trong tuần cũng có ít nhất một lớp mở.
+
+**Chi phí học từ level 0** (chỉ học ở trường, 30 XP/buổi):
+
+| Mục tiêu | Số buổi | Học phí | Số lượt làm nghề cho cùng lượng XP |
+| --- | --- | --- | --- |
+| Lv1 | 2 | $20 | 5 |
+| Lv3 | 8 | $170 | 22 |
+| Lv5 | 17 | $580 | 50 |
+| Lv10 | 55 | $3.710 | 162 |
+| Lv15 | 113 | $11.340 | 337 |
+| Lv20 | 192 | $25.640 | 575 |
+
+### 6.4 Nghề mở khóa theo level
+
+| | Kỹ thuật viên | Quản lý |
+| --- | --- | --- |
+| Lương gốc | $22 | $34 |
+| Giữ phím | 5 giây | 5 giây |
+| Kỹ năng (lương và XP) | Khéo tay | Trí tuệ |
+| Điều kiện | Khéo tay Lv3 (≈ 8 buổi, $170) | Trí tuệ Lv5 **và** Giao tiếp Lv3 (≈ $750) |
+| Năng lượng / Độ no / Sạch sẽ / Căng thẳng | −7 / −4 / −6 / +4 | −5 / −3 / −1 / +6 |
+
+Nghề chưa mở khóa vẫn hiện trên map kèm "(cần …)"; làm thử sẽ báo kỹ năng còn thiếu và level hiện tại.
+
+### 6.5 Đánh quái (Bãi luyện tập)
+
+**Cách chơi:** đến gần quái, **nhấn E để đánh** (ProximityPrompt "Đánh"). Quái đứng yên tại điểm xuất hiện và tự đánh người chơi gần nhất trong tầm. Hạ quái nhận tiền + XP Sức mạnh.
+
+**Người chơi:**
+
+| Công thức | Giá trị |
+| --- | --- |
+| Sát thương mỗi đòn | round(10 × (1 + 0,15 × level Sức mạnh)): Lv0 = 10, Lv5 = 18, Lv10 = 25, Lv20 = 40 |
+| Chu kỳ giữa hai đòn | 1,0 giây khi Năng lượng ≥ 50; chậm dần tới 2,0 giây khi Năng lượng bằng 0 |
+| Tầm đánh | 10 studs (server kiểm tra lại, dung sai 2 studs) |
+| Máu trong trận | máu Humanoid (100), **tách riêng** chỉ số Sức khỏe: bị đánh không gây kiệt sức |
+
+**Quái:**
+
+| | Slime Kẹo | Gấu Bông |
+| --- | --- | --- |
+| Máu | 30 | 120 |
+| Sát thương / chu kỳ quái | 5 / 2,0 giây | 14 / 2,5 giây |
+| Tầm đánh của quái | 11 studs | 11 studs |
+| Thưởng tiền | $12 | $50 |
+| XP Sức mạnh | 12 | 40 |
+| Chi phí mỗi lần hạ (Năng lượng / Độ no / Căng thẳng) | −6 / −4 / +5 | −20 / −10 / +14 |
+| Hồi sinh | 15 giây | 45 giây |
+| Số điểm xuất hiện | 4 | 2 |
+
+Ở Lv0, Slime cần 3 đòn (≈ 2 giây), Gấu cần 12 đòn (≈ 11 giây, nhận ≈ 70 máu). Ở Lv20: 1 đòn và 3 đòn.
+
+**Chia thưởng khi nhiều người cùng hạ một quái:** chỉ người đã gây ≥ 10% máu tối đa của quái được tính. Mỗi người nhận thưởng gốc × max(0,25; 1 − 0,25 × (số người − 1)): 1 người 100%, 2 người 75% mỗi người, 3 người 50%, từ 4 người 25%. Phần XP chia cùng tỉ lệ (tối thiểu 1 XP).
+
+**Trần tiền từ quái:** tối đa **$5.000 mỗi giờ** (cửa sổ 3.600 giây, `Combat.HourlyMoneyCap`). Cửa sổ lưu trong dữ liệu người chơi (`Combat = { WindowStart, Earned }`) nên thoát rồi vào lại không làm mới trần. Vượt trần vẫn nhận XP và bị trừ chi phí chỉ số, chỉ không nhận tiền.
+
+**Thua trận:** chết trong vòng 6 giây sau khi bị quái đánh ⇒ trả **phí Bệnh xá $10** (tối đa bằng số tiền đang có, không bao giờ âm), hồi sinh tại **Bệnh xá** (xa bãi luyện tập). Không kiệt sức, không mất % tiền. Chết vì lý do khác (rơi, kiệt sức) thì hồi sinh bình thường.
+
+### 6.6 Bảng xếp hạng tài sản
+
+- **Tài sản ròng = tiền + tổng giá các món vĩnh viễn đang sở hữu** (đồ thời trang MVP). Hiện trên HUD kèm hạng.
+- **OrderedDataStore** `EqualSocial_NetWorth_S1` (hậu tố là mùa, `Leaderboard.SeasonId`). Mỗi 180 giây (và khi rời game) ghi tài sản ròng của từng người chơi; mỗi 60 giây đọc top 50, trộn với giá trị **mới** của người đang ở server (ghi đè giá trị đã ghi vốn có thể cũ).
+- **Bảng 3D** ở quảng trường hiện 10 hàng đầu; **panel UI** (nhấn E ở bảng) hiện đủ top 50, tô nổi dòng của bạn, chân panel ghi "Hạng của bạn: #N" hoặc "ngoài top 50".
+- **Không có DataStore xếp hạng** (Studio chưa publish / chưa bật API): bảng chuyển sang chế độ **cục bộ** gồm người chơi đang ở server và ghi rõ điều đó.
+- **Nghi vấn gian lận:** tài sản tăng hơn $20.000 trong một chu kỳ ghi ⇒ ghi cảnh báo `[Leaderboard] Nghi vấn` kèm UserId, số cũ, số mới để xem xét; **không chặn** (chưa có công cụ xử lý).
+- Tên người chơi ngoài server lấy bằng `GetNameFromUserIdAsync` (tên đăng nhập) và được lưu đệm.
+
+### 6.7 Phân tích cân bằng v0.2 (nhận định, chưa kiểm chứng bằng playtest)
+
+- **Trường học là đổi tiền lấy thời gian.** Lv5 mất 17 buổi ≈ 100 giây và $580; làm nghề cho cùng XP mất 50 lượt ≈ 200 giây nhưng *kiếm* ≈ $600. Càng lên cao học phí càng đắt (Lv20 ≈ $25.640 cho 192 buổi) nên là nơi hút tiền lớn nhất của nền kinh tế.
+- **Quái ngang nghề về tiền/giây nhưng rủi ro hơn.** Slime ≈ $12 trong ≈ 3 giây, Gấu ≈ $50 trong ≈ 12 giây (≈ $4/giây) so với Bốc vác Lv0 $3/giây, đổi lại tốn Năng lượng gấp đôi, tăng Căng thẳng mạnh và bị đánh. Thực tế bị chặn bởi Năng lượng (Gấu −20/lần).
+- **Trần $5.000/giờ** chạm sau khoảng 25 phút cày Gấu liên tục. Nghề không có trần nên trần này chỉ ngăn quái trở thành nguồn thu *vô hạn*, không ngăn người chơi cày nghề.
+- **Người chơi mạnh làm quái mất ý nghĩa:** thưởng cố định trong khi Lv20 hạ Slime bằng 1 đòn. Cần quái mạnh hơn cho giai đoạn sau.
+- **Trạm miễn phí vẫn quá mạnh** (câu hỏi mở số 1): Giường hồi 40 Năng lượng trong 5 giây vẫn cho phép cày quái và học liên tục.
+
+### 6.8 Hạn chế đã biết của v0.2
+
+- Đánh quái bằng cách nhấn E liên tục (không có vũ khí, hoạt ảnh hay né tránh); quái không di chuyển.
+- ProximityPrompt mặc định của Roblox **chỉ hiện khi prompt nằm trong tầm nhìn camera**; khi test bằng công cụ tự động phải quay camera về phía khối.
+- Phát hiện gian lận bảng xếp hạng chỉ dừng ở cảnh báo; chưa có cơ chế gỡ khỏi bảng.
+- Lưu/tải và OrderedDataStore **thật** chưa được kiểm chứng (cần publish place); logic đã được kiểm thử bằng DataStore giả.
+- HUD cao hơn v0.1 (4 kỹ năng, 2 dòng mới); trên màn hình rất nhỏ panel cửa hàng/bảng xếp hạng có thể chồng lên HUD.
 
 ## 7. v0.3 — AURA cai quản (bản nháp)
 
@@ -279,3 +377,9 @@ Chưa có: trường học, quái, leaderboard, nhà/xe, AURA, PvP, Season, cosm
 15. **Dữ liệu và scale.** Khi nào chuyển sang ProfileStore (session locking)? OrderedDataStore hay MemoryStore cho bảng xếp hạng theo thời gian thực?
 16. **Cosmetic và Nổi tiếng** (đã đề xuất không cộng): chấp nhận được với người chơi mua cosmetic không? Có cần hệ "Phong cách" riêng để khoe cosmetic?
 17. **Tên game.** "Equal Social" chỉ là tên tạm.
+18. **Trần tiền từ quái ($5.000/giờ).** Nghề không có trần nên trần này chỉ chặn quái thành nguồn thu vô hạn. Con số phù hợp là bao nhiêu? Có nên đặt trần chung cho mọi nguồn thu thay vì riêng quái?
+19. **Điều khiển đánh quái.** Hiện chỉ nhấn E nên "kỹ năng điều khiển" gần như không có. Có đáng làm vũ khí/né tránh (Tool, hoạt ảnh) hay giữ đơn giản và để chỉ số/kỹ năng quyết định?
+20. **Quái đứng yên và thưởng cố định.** Người chơi Lv cao hạ quái trong 1–3 đòn. Cần quái mạnh dần, quái di chuyển hoặc thưởng tăng theo cấp bãi luyện tập?
+21. **Học phí cao ở level cao.** Lv20 tốn ≈ $25.640 qua trường học, làm nghề thì miễn phí nhưng chậm hơn khoảng 2 lần. Đây có phải đánh đổi mong muốn, hay cần giảm hệ số học phí?
+22. **Lịch lớp học.** Lớp chỉ mở 3–4 ngày/tuần (70 phút thực/tuần). Người chơi vào sai ngày có thấy bị chặn không? Có cần hiện đếm ngược tới ngày lớp mở?
+23. **Gian lận bảng xếp hạng.** Hiện chỉ ghi cảnh báo. Khi nào cần cơ chế gỡ người chơi khỏi bảng hoặc khoá tài khoản nghi vấn?

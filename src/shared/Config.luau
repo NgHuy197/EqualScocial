@@ -7,6 +7,8 @@
 	  * Thêm NGHỀ    : thêm một mục vào `Jobs`      (WorldBuilder tự xếp khối placeholder).
 	  * Thêm TRẠM    : thêm một mục vào `Stations`.
 	  * Thêm MÓN HÀNG: thêm một mục vào `Shops.<shopId>.Items`.
+	  * Thêm LỚP HỌC : thêm một mục vào `Classes`   (WorldBuilder tự xếp khối, ghi kèm ngày mở).
+	  * Thêm LOẠI QUÁI: thêm một mục vào `Monsters` (WorldBuilder tự xếp điểm xuất hiện theo `SpawnPoints`).
 	  * Id (khoá) chỉ gồm chữ, số và dấu gạch dưới, tối đa 32 ký tự (xem Util/Validate.isId).
 	  * Thang thời gian: các đại lượng "PerMinute" là mỗi phút THỰC; StatsService nhân với `Stats.TimeScale`.
 ]]
@@ -22,6 +24,11 @@ export type SkillDef = {
 	Name: string,
 }
 
+export type Requirement = {
+	Skill: string,
+	Level: number,
+}
+
 export type JobDef = {
 	Name: string,
 	ActionText: string,
@@ -29,10 +36,38 @@ export type JobDef = {
 	HoldDuration: number, -- giây giữ phím
 	Skill: string, -- id kỹ năng được cộng XP và tăng lương
 	StatDelta: { [string]: number }, -- thay đổi chỉ số sau mỗi lượt làm
+	Requires: { Requirement }?, -- điều kiện mở khóa nghề (mọi mục đều phải đạt)
 	XPReward: number?, -- mặc định JobRules.XPPerShift
 	MinEnergy: number?, -- mặc định JobRules.MinEnergyToWork
 	Color: Color3?, -- chỉ dùng cho khối placeholder
 	Size: Vector3?,
+}
+
+export type ClassDef = {
+	Name: string,
+	ActionText: string,
+	Skill: string, -- kỹ năng được cộng XP
+	Days: { number }, -- các ngày lớp mở cửa (1 = Thứ Hai ... 7 = Chủ Nhật)
+	HoldDuration: number,
+	StatDelta: { [string]: number }, -- chi phí chỉ số mỗi buổi
+	XPReward: number?, -- mặc định School.XPPerLesson
+	Color: Color3?,
+	Size: Vector3?,
+}
+
+export type MonsterDef = {
+	Name: string,
+	MaxHP: number,
+	Damage: number, -- sát thương mỗi đòn lên người chơi
+	AttackInterval: number, -- giây giữa hai đòn của quái
+	AttackRange: number, -- studs, tính từ tâm quái
+	Reward: number, -- tiền thưởng gốc khi bị hạ
+	XPReward: number, -- XP gốc cho kỹ năng Combat.Skill
+	StatDelta: { [string]: number }, -- chi phí chỉ số cho người tham gia hạ quái
+	RespawnSeconds: number,
+	SpawnPoints: number, -- số điểm xuất hiện trên bãi luyện tập (WorldBuilder tự xếp)
+	Color: Color3,
+	Size: Vector3,
 }
 
 export type StationDef = {
@@ -145,15 +180,20 @@ local Reasons = {
 	Job = "job",
 	Shop = "shop",
 	Exhaustion = "exhaustion",
+	School = "school", -- học phí
+	Monster = "monster", -- tiền thưởng hạ quái
+	Defeat = "defeat", -- phí Bệnh xá khi thua trận
 }
 
 -- ───────────────────────────── Kỹ năng ─────────────────────────────
 
 local Skills = {
-	Order = { "Strength", "Communication" },
+	Order = { "Strength", "Communication", "Intelligence", "Dexterity" },
 	Defs = {
 		Strength = { Name = "Sức mạnh" },
 		Communication = { Name = "Giao tiếp" },
+		Intelligence = { Name = "Trí tuệ" },
+		Dexterity = { Name = "Khéo tay" },
 	} :: { [string]: SkillDef },
 
 	StartLevel = 0,
@@ -193,6 +233,181 @@ local Jobs: { [string]: JobDef } = {
 		Color = Color3.fromRGB(120, 85, 70),
 		Size = Vector3.new(14, 8, 10),
 	},
+	-- Hai nghề dưới đây chỉ mở khóa khi đã học kỹ năng ở trường (xem Classes)
+	technician = {
+		Name = "Kỹ thuật viên",
+		ActionText = "Sửa chữa",
+		BasePay = 22,
+		HoldDuration = 5,
+		Skill = "Dexterity",
+		Requires = { { Skill = "Dexterity", Level = 3 } },
+		StatDelta = { Energy = -7, Hunger = -4, Hygiene = -6, Stress = 4 },
+		Color = Color3.fromRGB(90, 120, 150),
+		Size = Vector3.new(14, 8, 12),
+	},
+	manager = {
+		Name = "Quản lý",
+		ActionText = "Điều hành",
+		BasePay = 34,
+		HoldDuration = 5,
+		Skill = "Intelligence",
+		Requires = { { Skill = "Intelligence", Level = 5 }, { Skill = "Communication", Level = 3 } },
+		StatDelta = { Energy = -5, Hunger = -3, Hygiene = -1, Stress = 6 },
+		Color = Color3.fromRGB(70, 85, 110),
+		Size = Vector3.new(14, 8, 12),
+	},
+}
+
+-- ───────────────────────────── Lịch trong game ─────────────────────────────
+-- Ngày game tính từ giờ server (không lưu dữ liệu): ngày = floor(giờServer / DayLengthSeconds).
+-- Nhờ vậy mọi máy chủ và mọi người chơi luôn cùng một ngày trong tuần.
+
+local Calendar = {
+	DayLengthSeconds = 600, -- 10 phút thực = 1 ngày game, 1 tuần = 70 phút
+	DaysPerWeek = 7,
+	DayNames = {
+		"Thứ Hai",
+		"Thứ Ba",
+		"Thứ Tư",
+		"Thứ Năm",
+		"Thứ Sáu",
+		"Thứ Bảy",
+		"Chủ Nhật",
+	},
+	DayShortNames = { "T2", "T3", "T4", "T5", "T6", "T7", "CN" },
+}
+
+-- ───────────────────────────── Trường học ─────────────────────────────
+
+local School = {
+	-- Học phí mỗi buổi = TuitionPerLevel * (level kỹ năng hiện tại + 1)
+	TuitionPerLevel = 10,
+	XPPerLesson = 30, -- cao hơn làm nghề (JobRules.XPPerShift) nhưng không có lương
+}
+
+local Classes: { [string]: ClassDef } = {
+	gym = {
+		Name = "Phòng gym",
+		ActionText = "Tập luyện",
+		Skill = "Strength",
+		Days = { 1, 3, 5 }, -- T2, T4, T6
+		HoldDuration = 6,
+		StatDelta = { Energy = -10, Hunger = -5, Hygiene = -6, Stress = 2 },
+		Color = Color3.fromRGB(200, 90, 80),
+		Size = Vector3.new(16, 9, 12),
+	},
+	softskills = {
+		Name = "Lớp kỹ năng mềm",
+		ActionText = "Học",
+		Skill = "Communication",
+		Days = { 2, 4, 6 }, -- T3, T5, T7
+		HoldDuration = 6,
+		StatDelta = { Energy = -6, Hunger = -3, Hygiene = -1, Stress = 3 },
+		Color = Color3.fromRGB(230, 170, 70),
+		Size = Vector3.new(16, 9, 12),
+	},
+	library = {
+		Name = "Thư viện",
+		ActionText = "Đọc sách",
+		Skill = "Intelligence",
+		Days = { 1, 2, 4, 5 }, -- T2, T3, T5, T6
+		HoldDuration = 6,
+		StatDelta = { Energy = -8, Hunger = -4, Hygiene = -1, Stress = 4 },
+		Color = Color3.fromRGB(80, 110, 190),
+		Size = Vector3.new(16, 9, 12),
+	},
+	workshop = {
+		Name = "Xưởng thực hành",
+		ActionText = "Thực hành",
+		Skill = "Dexterity",
+		Days = { 3, 6, 7 }, -- T4, T7, CN
+		HoldDuration = 6,
+		StatDelta = { Energy = -8, Hunger = -4, Hygiene = -4, Stress = 3 },
+		Color = Color3.fromRGB(110, 160, 130),
+		Size = Vector3.new(16, 9, 12),
+	},
+}
+
+-- ───────────────────────────── Đánh quái ─────────────────────────────
+-- Nhấn E vào quái để đánh (ProximityPrompt). Máu của người chơi trong trận là máu Humanoid,
+-- tách riêng khỏi chỉ số Sức khỏe của hệ sinh tồn.
+
+local Combat = {
+	Skill = "Strength", -- kỹ năng quyết định sát thương và nhận XP
+	-- Sát thương = round(BaseDamage * (1 + DamagePerStrengthLevel * level Sức mạnh))
+	BaseDamage = 10,
+	DamagePerStrengthLevel = 0.15,
+	-- Chu kỳ giữa hai đòn = AttackInterval / tốc độ; tốc độ tăng tuyến tính từ MinSpeedFactor
+	-- (Năng lượng 0) tới 1 (Năng lượng >= FullSpeedEnergy)
+	AttackInterval = 1.0,
+	FullSpeedEnergy = 50,
+	MinSpeedFactor = 0.5,
+	PlayerAttackRange = 10, -- studs (khoảng cách kích hoạt prompt)
+	AttackRangeTolerance = 2, -- server cho phép lệch thêm chừng này khi kiểm tra tầm đánh
+	MinAttackCooldown = 0.4, -- cooldown tối thiểu phía server của prompt đánh
+	MonsterTickSeconds = 0.5, -- chu kỳ quái "suy nghĩ" (tìm mục tiêu, đánh, hồi sinh)
+
+	-- Chia thưởng khi nhiều người cùng hạ một quái (chống cày theo nhóm)
+	MinContribution = 0.10, -- phải gây >= 10% máu tối đa mới được tính là người tham gia
+	-- Mỗi người nhận thưởng gốc * max(MinShare, 1 - SharePenaltyPerExtraPlayer * (số người - 1))
+	SharePenaltyPerExtraPlayer = 0.25,
+	MinShare = 0.25,
+
+	-- Trần tiền kiếm từ quái (chống lạm phát). Vượt trần vẫn nhận XP, không nhận tiền.
+	HourlyMoneyCap = 5000,
+	CapWindowSeconds = 3600,
+
+	-- Thua trận: chết trong DefeatWindowSeconds giây sau khi bị quái đánh => trả phí, hồi sinh ở Bệnh xá
+	DefeatFee = 10,
+	DefeatWindowSeconds = 6,
+	-- Thời gian tối đa đợi engine đặt nhân vật mới vào điểm hồi sinh trước khi đưa tới Bệnh xá
+	SpawnSettleSeconds = 2,
+}
+
+local Monsters: { [string]: MonsterDef } = {
+	slime = {
+		Name = "Slime Kẹo",
+		MaxHP = 30,
+		Damage = 5,
+		AttackInterval = 2.0,
+		AttackRange = 11,
+		Reward = 12,
+		XPReward = 12,
+		StatDelta = { Energy = -6, Hunger = -4, Stress = 5 },
+		RespawnSeconds = 15,
+		SpawnPoints = 4,
+		Color = Color3.fromRGB(255, 130, 190),
+		Size = Vector3.new(4, 4, 4), -- quái là hình cầu: chỉ cạnh X được dùng làm đường kính
+	},
+	bear = {
+		Name = "Gấu Bông",
+		MaxHP = 120,
+		Damage = 14,
+		AttackInterval = 2.5,
+		AttackRange = 11,
+		Reward = 50,
+		XPReward = 40,
+		StatDelta = { Energy = -20, Hunger = -10, Stress = 14 },
+		RespawnSeconds = 45,
+		SpawnPoints = 2,
+		Color = Color3.fromRGB(176, 128, 84),
+		Size = Vector3.new(7, 7, 7),
+	},
+}
+
+-- ───────────────────────────── Bảng xếp hạng ─────────────────────────────
+
+local Leaderboard = {
+	-- Tài sản ròng = tiền + tổng giá các món vĩnh viễn đang sở hữu
+	StoreName = "EqualSocial_NetWorth_S1", -- hậu tố là SeasonId; mùa mới (v0.4) dùng store mới
+	SeasonId = 1,
+	TopCount = 50, -- số hạng đọc về và hiển thị trong panel
+	RefreshSeconds = 60, -- chu kỳ đọc bảng xếp hạng
+	PublishSeconds = 180, -- chu kỳ ghi tài sản ròng của từng người chơi (và khi rời game)
+	BoardRows = 10, -- số hàng trên bảng 3D
+	SuspiciousJump = 20000, -- tăng hơn mức này trong một chu kỳ ghi => ghi cảnh báo để xem xét
+	PanelCloseDistance = 25, -- client tự đóng panel khi đi xa hơn (studs)
+	OpenCooldown = 1, -- giây giữa hai lần mở bảng
 }
 
 -- ───────────────────────────── Trạm miễn phí ─────────────────────────────
@@ -290,7 +505,7 @@ local Prompts = {
 	DistanceTolerance = 6, -- server cho phép lệch thêm chừng này khi kiểm tra khoảng cách
 	-- Cooldown phía server = HoldDuration * CooldownFactor (chặn exploit bỏ qua thời gian giữ phím)
 	CooldownFactor = 0.85,
-	MinCooldown = 0.5,
+	MinCooldown = 0.4,
 	HoldNoticeThrottle = 1.5, -- giây giữa hai thông báo "không làm được" khi bắt đầu giữ phím
 }
 
@@ -299,6 +514,7 @@ local Prompts = {
 local RateLimits = {
 	GetState = { Calls = 4, Window = 10 }, -- tối đa 4 lần / 10 giây
 	ShopBuy = { Calls = 6, Window = 3 }, -- tối đa 6 lần / 3 giây
+	GetLeaderboard = { Calls = 3, Window = 10 }, -- tối đa 3 lần / 10 giây
 }
 
 local Replication = {
@@ -343,6 +559,15 @@ local World = {
 	JobsOrigin = Vector3.new(-60, 0, 0), -- xếp dọc trục Z
 	StationsOrigin = Vector3.new(60, 0, 0), -- xếp dọc trục Z
 	ShopsOrigin = Vector3.new(0, 0, -70), -- xếp dọc trục X
+	SchoolOrigin = Vector3.new(0, 0, 75), -- các lớp học xếp dọc trục X
+	LeaderboardOrigin = Vector3.new(0, 0, 45), -- bảng xếp hạng 3D ở quảng trường
+	LeaderboardSize = Vector3.new(28, 16, 1),
+	MonsterZoneOrigin = Vector3.new(0, 0, 120), -- tâm Bãi luyện tập
+	MonsterZoneRadius = 28, -- bán kính vòng điểm xuất hiện của quái
+	MonsterZoneSize = 70, -- cạnh của mảng sàn đánh dấu bãi luyện tập
+	InfirmaryOrigin = Vector3.new(-75, 0, 120), -- Bệnh xá (nơi hồi sinh khi thua trận)
+	InfirmarySize = Vector3.new(14, 6, 14),
+	InfirmaryDropHeight = 4, -- độ cao nhân vật xuất hiện phía trên Bệnh xá
 	DefaultSize = Vector3.new(12, 8, 12),
 	DefaultColor = Color3.fromRGB(150, 150, 150),
 	LabelMaxDistance = 90,
@@ -357,10 +582,34 @@ local Text = {
 	WorldHintHold = "Giữ [E]: %s",
 	WorldHintTap = "Nhấn [E]: %s",
 
+	WorldHintClass = "Giữ [E]: %s · Mở %s",
+	MonsterZoneLabel = "BÃI LUYỆN TẬP",
+	MonsterZoneHint = "Nhấn [E] vào quái để đánh",
+	InfirmaryLabel = "BỆNH XÁ",
+	InfirmaryHint = "Nơi hồi sinh khi bị quái đánh bại",
+	LeaderboardLabel = "Bảng xếp hạng tài sản",
+	LeaderboardPrompt = "Xem bảng",
+
 	-- Nghề & kỹ năng
 	TooTired = "Bạn quá mệt để làm việc (Năng lượng dưới %d). Hãy nghỉ ngơi trước!",
 	JobDone = "%s: +%s · +%d XP %s",
 	LevelUp = "Kỹ năng %s đã lên cấp %d!",
+	JobLocked = "Chưa mở khóa nghề này. Cần %s.",
+	RequirementItem = "%s Lv.%d",
+	RequirementProgress = "%s Lv.%d (bạn đang Lv.%d)",
+	JobTitleLocked = "%s (cần %s)",
+
+	-- Trường học
+	ClassClosed = "%s hôm nay nghỉ. Lớp mở vào: %s.",
+	ClassSkillMaxed = "Bạn đã đạt cấp tối đa kỹ năng %s, không cần học thêm.",
+	ClassNoMoney = "Học phí buổi này là %s, bạn không đủ tiền.",
+	ClassDone = "Buổi học %s: -%s · +%d XP %s",
+
+	-- Đánh quái
+	AttackAction = "Đánh",
+	MonsterKilled = "Hạ %s: +%s · +%d XP %s",
+	MonsterKilledCapped = "Hạ %s: +%d XP %s (đã chạm trần tiền từ quái trong giờ này)",
+	Defeated = "Bạn bị %s đánh bại! Phí Bệnh xá %s, bạn sẽ hồi sinh tại Bệnh xá.",
 
 	-- Kiệt sức
 	Exhausted = "Bạn đã kiệt sức và được đưa đi cấp cứu. Mất %s (%d%% số tiền).",
@@ -383,9 +632,29 @@ local Text = {
 	HudStats = "CHỈ SỐ",
 	HudSkills = "KỸ NĂNG",
 	HudFame = "Nổi tiếng: %s",
+	HudNetWorth = "Tài sản ròng: %s",
+	HudRank = "Hạng #%d",
+	HudRankNone = "Ngoài top %d",
+	HudDay = "Hôm nay: %s",
 	SkillLevel = "Lv.%d",
 	SkillLevelMax = "Lv.%d (Tối đa)",
 	SkillXP = "%d/%d XP",
+
+	-- Bảng xếp hạng 3D và panel (BoardRow dùng cho cả hai)
+	BoardTitle = "BẢNG XẾP HẠNG TÀI SẢN",
+	BoardRow = "%d. %s · %s",
+	BoardLocalNote = "(chỉ gồm người chơi trong máy chủ này)",
+	BoardEmpty = "Chưa có dữ liệu xếp hạng",
+	UnknownPlayer = "Người chơi %d",
+	LeaderboardTitle = "Bảng xếp hạng tài sản",
+	LeaderboardYourRank = "Hạng của bạn: #%d · %s",
+	LeaderboardYourRankNone = "Hạng của bạn: ngoài top %d · %s",
+	LeaderboardUpdated = "Cập nhật %d giây trước",
+	LeaderboardLocal = "Chưa kết nối DataStore xếp hạng: bảng chỉ gồm người chơi trong máy chủ này.",
+	LeaderboardLoading = "Đang tải...",
+	LeaderboardError = "Không tải được bảng xếp hạng, hãy thử lại.",
+	LeaderboardAutoClosed = "Bạn đã đi xa nên bảng xếp hạng tự đóng.",
+	LeaderboardClose = "Đóng",
 
 	-- Cửa sổ cửa hàng (client)
 	ShopClose = "Đóng",
@@ -400,7 +669,7 @@ local Text = {
 }
 
 local Config = {
-	Version = "0.1.0",
+	Version = "0.2.0",
 	GameName = "Equal Social",
 	AIName = "AURA",
 
@@ -409,11 +678,18 @@ local Config = {
 		Job = "ES_Job",
 		Station = "ES_Station",
 		Shop = "ES_Shop",
+		Class = "ES_Class", -- lớp học (attribute ClassId)
+		Monster = "ES_Monster", -- quái đang sống (CombatService tự gắn, attribute MonsterId)
+		MonsterSpawn = "ES_MonsterSpawn", -- điểm xuất hiện của quái (attribute MonsterId)
+		Infirmary = "ES_Infirmary", -- nơi hồi sinh khi thua trận
+		Leaderboard = "ES_Leaderboard", -- bảng xếp hạng 3D (LeaderboardService tự vẽ SurfaceGui)
 	},
 	Attributes = {
 		Job = "JobId",
 		Station = "StationId",
 		Shop = "ShopId",
+		Class = "ClassId",
+		Monster = "MonsterId",
 	},
 
 	Data = Data,
@@ -423,6 +699,12 @@ local Config = {
 	Skills = Skills,
 	JobRules = JobRules,
 	Jobs = Jobs,
+	Calendar = Calendar,
+	School = School,
+	Classes = Classes,
+	Combat = Combat,
+	Monsters = Monsters,
+	Leaderboard = Leaderboard,
 	Stations = Stations,
 	Shops = Shops,
 	ShopRules = ShopRules,

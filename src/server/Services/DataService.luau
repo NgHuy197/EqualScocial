@@ -80,6 +80,7 @@ local function buildTemplate(): PlayerData
 		Stats = deepCopy(Config.Stats.Start),
 		Skills = skills,
 		Owned = {},
+		Combat = { WindowStart = 0, Earned = 0 },
 	}
 end
 
@@ -108,6 +109,17 @@ local function sanitize(data: PlayerData)
 			record.Level = math.clamp(math.floor(record.Level), 0, Config.Skills.MaxLevel)
 			record.XP = math.max(0, record.XP)
 		end
+	end
+
+	-- Cửa sổ trần tiền từ quái: số hỏng thì về mặc định (mở cửa sổ mới ở lần kiếm tiền kế)
+	local combat = data.Combat
+	if
+		not Validate.isFiniteNumber(combat.WindowStart)
+		or not Validate.isFiniteNumber(combat.Earned)
+	then
+		data.Combat = { WindowStart = 0, Earned = 0 }
+	else
+		combat.Earned = math.max(0, combat.Earned)
 	end
 end
 

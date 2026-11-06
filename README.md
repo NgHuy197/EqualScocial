@@ -2,16 +2,24 @@
 
 Game Roblox nhiều người chơi: một xã hội mà **mọi người xuất phát như nhau** (cùng tiền, cùng chỉ số, không gia thế, không bệnh tật) và cạnh tranh công bằng bằng cách học skill, làm nghề, luyện tập, rồi mua tài sản để khoe. Mọi tài sản thuộc về siêu máy tính AI **AURA**. Lối chơi giống Stardew Valley + The Sims nhưng đề cao tương tác và cạnh tranh giữa người chơi.
 
-Trạng thái: **MVP v0.1**. Chữ hiển thị trong game là tiếng Việt.
+Trạng thái: **v0.2** (MVP v0.1 + trường học, đánh quái, bảng xếp hạng). Chữ hiển thị trong game là tiếng Việt.
 
 Tài liệu: [docs/GDD.md](docs/GDD.md) (thiết kế, công thức, lộ trình) · [CLAUDE.md](CLAUDE.md) (luật kiến trúc, checklist test cho người và Claude Code).
 
-## Tính năng MVP
+## Tính năng
 
+**MVP v0.1**
 - 6 chỉ số (Độ no, Năng lượng, Sạch sẽ, Hạnh phúc, Căng thẳng, Sức khỏe) tụt theo thời gian; Sức khỏe về 0 ⇒ "kiệt sức" (mất 10% tiền, respawn).
-- Tiền ($100 khởi điểm), 2 nghề (Bốc vác kho hàng, Pha chế cà phê) với 2 kỹ năng (Sức mạnh, Giao tiếp), tối đa level 20.
+- Tiền ($100 khởi điểm), nghề kiếm tiền, kỹ năng tối đa level 20.
 - 3 trạm miễn phí (Tắm, Giường, Ghế công viên), 2 cửa hàng (Quán ăn, Thời trang), chỉ số Nổi tiếng.
 - Lưu dữ liệu bằng DataStore; server-authoritative; map placeholder tự dựng để nhấn Play là chơi được.
+
+**v0.2**
+- **Lịch trong game**: 10 phút thực = 1 ngày, tuần 7 ngày, hiện trên HUD.
+- **Trường học** 4 lớp (Phòng gym, Lớp kỹ năng mềm, Thư viện, Xưởng thực hành) mở theo ngày; học phí = 10 × (level + 1), 30 XP mỗi buổi. Thêm 2 kỹ năng: Trí tuệ, Khéo tay.
+- **Nghề mở khóa theo level**: Kỹ thuật viên (Khéo tay Lv3), Quản lý (Trí tuệ Lv5 + Giao tiếp Lv3).
+- **Đánh quái** ở Bãi luyện tập (Slime Kẹo, Gấu Bông): nhấn E để đánh, chia thưởng khi đánh nhóm, trần tiền $5.000/giờ, thua trận thì trả phí và hồi sinh ở Bệnh xá.
+- **Bảng xếp hạng tài sản**: bảng 3D ở quảng trường, panel top 50, hạng hiện trên HUD (OrderedDataStore; không có API thì dùng bảng cục bộ).
 
 ## Cài đặt từng bước
 
@@ -70,7 +78,9 @@ Nếu chưa làm 2 bước này, game **vẫn chạy được** nhưng ở chế
 
 ### 6. Chơi thử
 
-Nhấn **Play** (F5). Map placeholder tự dựng (các khối có nhãn): Kho hàng và Quán cà phê (bên trái), Vòi tắm / Giường / Ghế công viên (bên phải), Quán ăn và Cửa hàng thời trang (phía trước). Đến gần khối, giữ **E** để làm việc/dùng trạm, nhấn **E** ở cửa hàng để mở cửa sổ mua đồ.
+Nhấn **Play** (F5). Map placeholder tự dựng (các khối có nhãn), xung quanh điểm xuất phát ở gốc toạ độ: 4 nghề ở x = −60, 3 trạm (Vòi tắm / Giường / Ghế công viên) ở x = +60, 2 cửa hàng ở z = −70, bảng xếp hạng 3D ở z = +45, 4 lớp học ở z = +75, Bãi luyện tập quanh z = +120 và Bệnh xá ở (−75, 120). Đến gần khối, giữ **E** để làm việc/học/dùng trạm, nhấn **E** ở cửa hàng, bảng xếp hạng hoặc vào quái để mở cửa sổ/đánh quái.
+
+> Prompt **E** của Roblox chỉ hiện khi khối nằm trong tầm nhìn camera: hãy quay mặt về phía khối.
 
 Checklist test đầy đủ ở [CLAUDE.md](CLAUDE.md#checklist-test-thủ-công-mvp).
 
@@ -79,9 +89,9 @@ Checklist test đầy đủ ở [CLAUDE.md](CLAUDE.md#checklist-test-thủ-công
 ```
 default.project.json   rokit.toml   selene.toml   stylua.toml
 src/
-  shared/   Config.luau (mọi số liệu + chữ), Remotes, Format, Types
-  server/   init.server.luau, WorldBuilder.luau, Services/, Util/
-  client/   init.client.luau, UI/ (Theme, HUD, Toast, ShopWindow)
+  shared/   Config.luau (mọi số liệu + chữ), Remotes, Format, Types, Calendar
+  server/   init.server.luau, WorldBuilder.luau, Services/ (11 service), Util/
+  client/   init.client.luau, UI/ (Theme, HUD, Toast, ShopWindow, LeaderboardWindow)
 docs/GDD.md
 ```
 

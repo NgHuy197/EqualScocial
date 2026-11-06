@@ -126,6 +126,8 @@ function ReplicationService:BuildSnapshot(player: Player): Types.Snapshot?
 		Seq = seq,
 		Money = data.Money,
 		Fame = services.Shop:GetFame(player),
+		NetWorth = services.Leaderboard:GetNetWorth(player),
+		Rank = services.Leaderboard:GetRank(player),
 		Stats = stats,
 		Skills = skills,
 		Owned = owned,

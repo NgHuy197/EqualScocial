@@ -29,6 +29,9 @@ local SERVICE_ORDER = {
 	"Jobs",
 	"Stations",
 	"Shop",
+	"School",
+	"Combat",
+	"Leaderboard",
 	"Replication",
 }
 
@@ -46,6 +49,9 @@ local services: { [string]: any } = {
 	Jobs = require(Services.JobService),
 	Stations = require(Services.StationService),
 	Shop = require(Services.ShopService),
+	School = require(Services.SchoolService),
+	Combat = require(Services.CombatService),
+	Leaderboard = require(Services.LeaderboardService),
 	Replication = require(Services.ReplicationService),
 }
 

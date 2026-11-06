@@ -122,6 +122,22 @@ function ShopService:GetFame(player: Player): number
 	return fame
 end
 
+-- Tổng giá các món vĩnh viễn đang sở hữu (dùng để tính tài sản ròng cho bảng xếp hạng)
+function ShopService:GetOwnedValue(player: Player): number
+	local data = services.Data:Get(player)
+	if not data then
+		return 0
+	end
+	local value = 0
+	for itemId in data.Owned do
+		local item = itemById[itemId]
+		if item then
+			value += item.Price
+		end
+	end
+	return value
+end
+
 -- ───────────────────────────── Nội bộ ─────────────────────────────
 
 -- Người chơi có đang đứng trong ShopRules.MaxBuyDistance của ít nhất một cửa hàng mang ShopId này?

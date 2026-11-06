@@ -8,18 +8,21 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 -- Chờ thư mục Shared replicate đủ trước khi require
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-for _, name in { "Config", "Format", "Remotes", "Types" } do
+for _, name in { "Calendar", "Config", "Format", "Remotes", "Types" } do
 	Shared:WaitForChild(name)
 end
 
+local Calendar = require(ReplicatedStorage.Shared.Calendar)
 local Config = require(ReplicatedStorage.Shared.Config)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local HUD = require(script.UI.HUD)
+local LeaderboardWindow = require(script.UI.LeaderboardWindow)
 local ShopWindow = require(script.UI.ShopWindow)
 local Toast = require(script.UI.Toast)
 
@@ -59,6 +62,22 @@ local shopWindow = ShopWindow.new(screenGui, requestBuy, function()
 	toast:Show(Config.Text.ShopAutoClosed, "info")
 end)
 
+-- Lấy bảng xếp hạng từ server; nil nếu lỗi mạng hoặc bị rate-limit
+local getLeaderboard = Remotes.Function("GetLeaderboard")
+local function fetchLeaderboard(): Types.LeaderboardView?
+	local ok, view = pcall(function()
+		return getLeaderboard:InvokeServer()
+	end)
+	if ok and type(view) == "table" and type(view.Entries) == "table" then
+		return view :: Types.LeaderboardView
+	end
+	return nil
+end
+
+local leaderboardWindow = LeaderboardWindow.new(screenGui, fetchLeaderboard, function()
+	toast:Show(Config.Text.LeaderboardAutoClosed, "info")
+end)
+
 -- Chỉ áp dụng snapshot mới hơn bản hiện có (GetState và StateUpdate có thể đến lệch thứ tự)
 local function applySnapshot(snapshot: any)
 	if type(snapshot) ~= "table" or type(snapshot.Seq) ~= "number" then
@@ -84,7 +103,26 @@ end)
 
 Remotes.Event("OpenShop").OnClientEvent:Connect(function(shopId: any)
 	if type(shopId) == "string" and Config.Shops[shopId] then
+		leaderboardWindow:Close() -- chỉ một cửa sổ mở cùng lúc
 		shopWindow:Open(shopId, state)
+	end
+end)
+
+Remotes.Event("OpenLeaderboard").OnClientEvent:Connect(function()
+	shopWindow:Close()
+	leaderboardWindow:Open()
+end)
+
+-- Dòng "Hôm nay: ..." trên HUD: ngày game suy ra từ giờ server, chỉ cập nhật khi đổi ngày
+task.spawn(function()
+	local shownDay = 0
+	while true do
+		local day = Calendar.GetWeekday(Workspace:GetServerTimeNow())
+		if day ~= shownDay then
+			shownDay = day
+			hud:SetDay(string.format(Config.Text.HudDay, Calendar.DayName(day)))
+		end
+		task.wait(1)
 	end
 end)
 

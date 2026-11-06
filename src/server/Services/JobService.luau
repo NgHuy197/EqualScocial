@@ -15,6 +15,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Format)
 local Types = require(ReplicatedStorage.Shared.Types)
+local Describe = require(script.Parent.Parent.Util.Describe)
 local Prompts = require(script.Parent.Parent.Util.Prompts)
 
 type JobDef = Config.JobDef
@@ -33,6 +34,14 @@ local function validateConfig()
 			if not Config.Stats.Defs[statId] then
 				warn(
 					`[JobService] Job '{jobId}' có StatDelta cho chỉ số không tồn tại: {statId}`
+				)
+			end
+		end
+		local requires: { Config.Requirement } = job.Requires or {}
+		for _, requirement in requires do
+			if not Config.Skills.Defs[requirement.Skill] then
+				warn(
+					`[JobService] Job '{jobId}' yêu cầu kỹ năng không tồn tại: {requirement.Skill}`
 				)
 			end
 		end
@@ -56,7 +65,7 @@ function JobService:Start()
 		end
 		return {
 			ActionText = job.ActionText,
-			ObjectText = job.Name,
+			ObjectText = Describe.JobTitle(job), -- nghề có điều kiện hiện kèm "(cần ...)"
 			HoldDuration = job.HoldDuration,
 			OnTriggered = function(player: Player)
 				self:_work(player, job)
@@ -81,6 +90,28 @@ function JobService:_canWork(player: Player, job: JobDef): (boolean, string?)
 	local minEnergy = job.MinEnergy or Config.JobRules.MinEnergyToWork
 	if energy < minEnergy then
 		return false, string.format(Config.Text.TooTired, minEnergy)
+	end
+
+	-- Điều kiện mở khóa: liệt kê các kỹ năng chưa đủ level (kèm level hiện tại)
+	local missing: { string } = {}
+	local requires: { Config.Requirement } = job.Requires or {}
+	for _, requirement in requires do
+		local level = services.Skills:GetLevel(player, requirement.Skill)
+		if level < requirement.Level then
+			local def = Config.Skills.Defs[requirement.Skill]
+			table.insert(
+				missing,
+				string.format(
+					Config.Text.RequirementProgress,
+					if def then def.Name else requirement.Skill,
+					requirement.Level,
+					level
+				)
+			)
+		end
+	end
+	if #missing > 0 then
+		return false, string.format(Config.Text.JobLocked, table.concat(missing, ", "))
 	end
 	return true, nil
 end

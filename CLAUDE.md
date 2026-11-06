@@ -8,7 +8,7 @@ Game Roblox nhiều người chơi, viết bằng Luau + Rojo. **Mọi chữ hi�
 
 Một xã hội giống ngoài đời, nhưng mọi người chơi **xuất phát như nhau**: cùng tiền ($100), cùng chỉ số, không gia thế, không bệnh tật. Người chơi cạnh tranh công bằng bằng cách học skill, làm nghề, luyện tập, đấu với nhau rồi mua tài sản để khoe. Mọi tài sản thuộc sở hữu và do siêu máy tính AI **AURA** cai quản. Lối chơi giống Stardew Valley + The Sims, nhưng đề cao tương tác và cạnh tranh giữa người chơi.
 
-Trạng thái: **MVP v0.1** (xem GDD mục 4). Lộ trình: v0.2 trường học/đánh quái/leaderboard → v0.3 AURA → v0.4 PvP + Season.
+Trạng thái: **v0.2** (MVP v0.1 + trường học, đánh quái, bảng xếp hạng; xem GDD mục 4 và 6). Lộ trình: v0.3 AURA → v0.4 PvP + Season.
 
 ## Lệnh
 
@@ -33,15 +33,17 @@ Sau mỗi thay đổi code, tối thiểu phải qua: `stylua --check src`, `sel
 ## Cấu trúc
 
 ```
-src/shared  → ReplicatedStorage.Shared                       Config, Remotes, Format, Types
+src/shared  → ReplicatedStorage.Shared                       Config, Remotes, Format, Types, Calendar
 src/server  → ServerScriptService.Server (init.server.luau)  Services/, Util/, WorldBuilder
 src/client  → StarterPlayer.StarterPlayerScripts.Client      init.client.luau, UI/
 ```
 
 - `Config.luau`: **toàn bộ** số liệu cân bằng và câu chữ hiển thị (`Config.Text`).
 - `Remotes.luau`: danh sách RemoteEvent/RemoteFunction. Server gọi `Remotes.Init()` một lần; nơi khác dùng `Remotes.Event(name)` / `Remotes.Function(name)`.
-- `Services/*`: `DataService`, `EconomyService`, `StatsService`, `SkillService`, `JobService`, `StationService`, `ShopService`, `ReplicationService`.
-- `Util/*`: `Validate` (kiểm tra dữ liệu/khoảng cách), `RateLimiter`, `Prompts` (gắn ProximityPrompt theo tag có cooldown + kiểm tra khoảng cách phía server).
+- `Calendar.luau`: lịch trong game thuần tính toán từ giờ server (`workspace:GetServerTimeNow()`), dùng chung server (lớp mở/đóng) và client (HUD).
+- `Services/*` (thứ tự khởi động trong `init.server.luau`): `DataService`, `EconomyService`, `StatsService`, `SkillService`, `JobService`, `StationService`, `ShopService`, `SchoolService`, `CombatService`, `LeaderboardService`, `ReplicationService`.
+- `Util/*`: `Validate` (kiểm tra dữ liệu/khoảng cách), `RateLimiter`, `Prompts` (gắn ProximityPrompt theo tag có cooldown + kiểm tra khoảng cách phía server), `Describe` (chuỗi mô tả nghề/điều kiện dùng chung), `MonsterModel` (dựng quái và thanh máu), `BoardGui` (vẽ chữ lên bảng xếp hạng 3D).
+- Client `UI/*`: `Theme`, `HUD`, `Toast`, `ShopWindow`, `LeaderboardWindow`.
 - `WorldBuilder`: dựng map placeholder nếu Workspace chưa có `World`; map thật chỉ cần gắn **tag + attribute** (xem bên dưới).
 
 ## Luật kiến trúc (BẮT BUỘC)
@@ -77,17 +79,21 @@ Model/Part đặt trong Workspace, có ít nhất một `BasePart` (prompt gắn
 
 | Loại | Tag (`Config.Tags`) | Attribute | Giá trị |
 | --- | --- | --- | --- |
-| Nghề | `ES_Job` | `JobId` | khoá trong `Config.Jobs` (`warehouse`, `barista`) |
+| Nghề | `ES_Job` | `JobId` | khoá trong `Config.Jobs` (`warehouse`, `barista`, `technician`, `manager`) |
+| Lớp học | `ES_Class` | `ClassId` | khoá trong `Config.Classes` (`gym`, `softskills`, `library`, `workshop`) |
 | Trạm | `ES_Station` | `StationId` | khoá trong `Config.Stations` (`shower`, `bed`, `bench`) |
 | Cửa hàng | `ES_Shop` | `ShopId` | khoá trong `Config.Shops` (`restaurant`, `fashion`) |
+| Điểm xuất hiện quái | `ES_MonsterSpawn` | `MonsterId` | khoá trong `Config.Monsters` (`slime`, `bear`); phải là `BasePart` |
+| Bệnh xá | `ES_Infirmary` | (không) | nơi hồi sinh khi thua trận |
+| Bảng xếp hạng 3D | `ES_Leaderboard` | (không) | `LeaderboardService` tự vẽ `SurfaceGui` lên mặt trước (-Z) |
 
-Nếu Workspace đã có thư mục/model tên `World`, WorldBuilder không dựng gì thêm.
+Tag `ES_Monster` do `CombatService` tự gắn lên quái đang sống, không gắn tay. Nếu Workspace đã có thư mục/model tên `World`, WorldBuilder không dựng gì thêm.
 
 ## Checklist test thủ công (MVP)
 
 Chạy trong Studio (Play, hoặc Test → 2 người chơi). Để test nhanh theo thời gian, đặt tạm `Config.Stats.TimeScale = 60` (nhớ trả về `1`).
 
-1. **Khởi động**: Output có `[WorldBuilder] Đã dựng map placeholder` và `[EqualSocial] Server đã sẵn sàng`, không có lỗi đỏ. HUD hiện **$100**, Nổi tiếng 0, 6 thanh chỉ số (Độ no/Năng lượng/Sạch sẽ 100, Hạnh phúc 70, Căng thẳng 10, Sức khỏe 100), 2 kỹ năng Lv.0.
+1. **Khởi động**: Output có `[WorldBuilder] Đã dựng map placeholder: 4 nghề, 4 lớp học, 3 trạm, 2 cửa hàng, 6 điểm xuất hiện quái` và `[EqualSocial] Server đã sẵn sàng`, không có lỗi đỏ. HUD hiện **$100**, Nổi tiếng 0, "Tài sản ròng: $100 · Hạng #1", "Hôm nay: Thứ …", 6 thanh chỉ số (Độ no/Năng lượng/Sạch sẽ 100, Hạnh phúc 70, Căng thẳng 10, Sức khỏe 100), 4 kỹ năng Lv.0.
 2. **Làm việc nhận tiền**: giữ E 4 giây ở *Bốc vác kho hàng* → +$12 (tiền $112), +10 XP Sức mạnh, Năng lượng −6, Độ no −4, Sạch sẽ −5, Căng thẳng +3; có toast. *Pha chế cà phê* (3 giây) → +$10, XP Giao tiếp.
 3. **Lên cấp & lương**: làm 5 lượt cùng một nghề → toast "lên cấp 1"; lượt kế lương = round(12 × 1.1) = $13.
 4. **Quá mệt**: hạ Năng lượng dưới 15 (làm liên tục ~15 lượt) → giữ phím báo "quá mệt", không nhận tiền/XP.
@@ -99,9 +105,22 @@ Chạy trong Studio (Play, hoặc Test → 2 người chơi). Để test nhanh t
 10. **Chống gian lận**: từ một LocalScript thử (đặt tạm trong StarterPlayerScripts), gọi `game.ReplicatedStorage.Remotes.ShopBuy:InvokeServer("restaurant","banh_mi")` khi đứng xa → "quá xa"; gọi với tham số sai kiểu (`123`, `{}`) → "Yêu cầu không hợp lệ"; gọi dồn dập > 6 lần/3 giây → "thao tác quá nhanh".
 11. **Nhiều người chơi**: mỗi người có dữ liệu, toast và cửa sổ cửa hàng riêng.
 
+**Checklist v0.2** (prompt mặc định của Roblox chỉ hiện khi khối nằm trong tầm nhìn camera: hãy quay mặt về phía khối trước khi giữ E):
+
+12. **Lịch**: dòng "Hôm nay" trên HUD đổi sang ngày kế sau mỗi 10 phút thực (7 ngày một vòng).
+13. **Trường học**: ở lớp *đang mở hôm nay*, giữ E 6 giây → trừ học phí 10 × (level + 1), +30 XP, chi phí chỉ số của lớp, có toast. Ở lớp *đang nghỉ*: ngay khi bắt đầu giữ phím có toast "hôm nay nghỉ, lớp mở vào: …", không thu phí. Thiếu tiền / Năng lượng dưới 15 / kỹ năng đã tối đa → từ chối, không thu phí.
+14. **Nghề mở khóa**: Kỹ thuật viên cần Khéo tay Lv3; Quản lý cần Trí tuệ Lv5 **và** Giao tiếp Lv3. Chưa đủ → toast nêu kỹ năng còn thiếu và level hiện tại, không nhận tiền; đủ → lương = gốc × (1 + 0,1 × level kỹ năng nghề).
+15. **Đánh quái**: nhấn E vào Slime Kẹo (Lv0 cần 3 đòn, cách nhau ≥ 1 giây; đòn dồn dập bị bỏ qua) → +$12, +12 XP Sức mạnh, Năng lượng −6, Độ no −4, Căng thẳng +5, thanh máu quái giảm, toast "Hạ Slime Kẹo…". Đứng trong tầm 11 studs thì bị quái đánh (máu Humanoid giảm; chỉ số Sức khỏe không đổi). Quái hồi sinh sau 15 giây.
+16. **Thua trận**: để quái hạ gục → toast "bị … đánh bại", mất $10 (không bao giờ âm tiền), hồi sinh ở Bệnh xá (không kiệt sức, không mất 10% tiền).
+17. **Chia thưởng và trần tiền**: hai người cùng hạ Gấu Bông (mỗi người gây ≥ 10% máu) → mỗi người nhận 75% ($38, 30 XP); người chỉ đánh 1 đòn không nhận gì. Muốn thử trần nhanh: đặt tạm `Config.Combat.HourlyMoneyCap = 20` → sau khi chạm trần vẫn nhận XP, không nhận tiền, toast cảnh báo.
+18. **Bảng xếp hạng**: bảng 3D ở quảng trường; nhấn E mở panel (dòng của bạn được tô nổi, chân panel ghi hạng). Không có API: panel ghi chú "chỉ gồm người chơi trong máy chủ này". Có API + publish: thoát rồi vào lại vẫn còn hạng và tài sản.
+19. **Chống gian lận v0.2**: gọi `GetLeaderboard:InvokeServer()` hơn 3 lần/10 giây từ LocalScript thử → các lần vượt trả về `nil`.
+
 ## Điều chưa làm / lưu ý
 
 - `DataService` chưa có session locking — TODO chuyển sang ProfileStore (ghi chú trong file).
 - Chưa có test tự động trong Studio; kiểm tra tự động hiện chỉ gồm biên dịch, type-check, lint và `rojo build`.
 - Đã smoke-test thủ công trong Studio thật (làm nghề, trạm, mua hàng bằng chuột, tự đóng cửa sổ, kiệt sức, chống gian lận qua Remote). **Chưa kiểm chứng lưu/tải bằng DataStore thật** vì place thử chưa publish; cần bạn thử theo mục 9.
 - Công cụ MCP `execute_luau` chạy trong sandbox: không `require` được module dự án và không gọi được RemoteFunction. Muốn test sâu, đặt tạm một Script/LocalScript thử vào place (đừng commit vào `src/`).
+- v0.2 đã smoke-test trong Studio thật (học ở Xưởng, lớp đóng cửa, đánh quái, thua trận → Bệnh xá, panel bảng xếp hạng, giới hạn `GetLeaderboard`). **Chưa kiểm chứng OrderedDataStore thật** (cần publish place).
+- Khi test tự động: prompt chỉ hiện nếu khối trong tầm nhìn camera. Đặt `workspace.CurrentCamera.CameraType = Scriptable` rồi `CFrame = CFrame.lookAt(...)` về phía khối. Khi hồi sinh, vị trí nhân vật lúc `CharacterAdded` còn ở gốc toạ độ; engine đặt vào điểm hồi sinh sau đó (xem `CombatService:_sendToInfirmary`).
