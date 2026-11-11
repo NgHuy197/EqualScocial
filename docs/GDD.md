@@ -410,7 +410,8 @@ Số liệu ở `Config.Pvp`, `Config.Season`. Code: `PvpService`, `SeasonServic
 ### 8.1 Đấu trường 1v1
 
 - **Vị trí** (map placeholder): sàn đấu tâm (0, −125), hai bục cách tâm 14 studs theo trục X, quầy hàng chờ ở (0, −89). Map thật: gắn tag `ES_Arena` cho quầy và `ES_ArenaPad` + `PadIndex` = 1/2 cho hai bục; tâm đấu trường = trung điểm hai bục.
-- **Hàng chờ:** nhấn E ở quầy để vào, nhấn lần nữa để rời. Cần ≥ 20 Năng lượng. Ghép cặp theo thứ tự vào hàng chờ (mỗi giây).
+- **Hàng chờ:** nhấn E ở quầy để vào, nhấn lần nữa để rời. Cần ≥ 20 Năng lượng.
+- **Ghép cặp theo điểm** (mỗi giây): duyệt theo thứ tự vào hàng chờ, mỗi người được ghép với người có điểm gần nhất mà chênh lệch ≤ 100 + 10 × số giây đã chờ (của người chờ lâu hơn). Ví dụ chênh 400 điểm thì sau 30 giây chờ mới được ghép. Map có một cặp bục nên **mỗi lúc chỉ một trận**; người khác chờ trận đang diễn ra kết thúc.
 - **Trận:** dịch chuyển lên hai bục, đếm ngược 3 giây, đánh 60 giây. **Máu PvP riêng** (100), không đụng tới máu nhân vật: thua không chết, không mất tiền.
 - **Tấn công:** phím F hoặc nút "Đánh" (điện thoại / tay cầm). Server tự biết mục tiêu là đối thủ, kiểm tra nhịp 1 đòn/giây, tầm 10 studs (+2 dung sai) và rate-limit 12 lần/5 giây.
 - **Sát thương** = round(10 × (1 + 0,03 × level Sức mạnh)): Lv0 = 10, Lv20 = 16. Chỉ số ảnh hưởng nhẹ; giữ khoảng cách và đánh đúng nhịp quan trọng hơn.
@@ -424,7 +425,7 @@ Số liệu ở `Config.Pvp`, `Config.Season`. Code: `PvpService`, `SeasonServic
 
 - **Điểm Elo theo mùa:** bắt đầu 1000, K = 32 (ngang điểm: thắng +16, thua −16, hòa 0).
 - **Sau trận** (cả hai): Năng lượng −10, Độ no −5, Căng thẳng +8; XP Sức mạnh: thắng 20, hòa 12, thua 8. Hai người được đưa về cạnh quầy sau 2 giây.
-- **Chưa làm:** thể thức đội nhỏ, ghép cặp theo điểm, khán đài / xem trận.
+- **Chưa làm:** thể thức đội nhỏ, nhiều đấu trường cùng lúc, khán đài / xem trận.
 
 ### 8.2 Season
 
@@ -446,7 +447,8 @@ Số liệu ở `Config.Pvp`, `Config.Season`. Code: `PvpService`, `SeasonServic
 | Người có của | tài sản ròng cao nhất ≥ $10.000 |
 
 - HUD: "Mùa 1 · còn 55 ngày · PvP 1000 điểm" và danh hiệu mới nhất. Sang mùa có toast chào mùa mới và toast cho từng danh hiệu.
-- **Chưa làm:** cơ chế "bắt kịp" cho người vào giữa mùa, đêm chung kết, phần thưởng cosmetic cuối mùa, xem lịch sử các mùa trong UI.
+- **Cửa sổ Hồ sơ** (nút "Hồ sơ [P]" trên HUD hoặc phím P, mở ở bất cứ đâu): thành tích PvP và tài sản ròng cao nhất mùa này, mọi danh hiệu (mới nhất lên trước), lịch sử các mùa trước. Dữ liệu lấy qua `GetProfile` (chỉ hồ sơ của chính người gọi, 3 lần / 10 giây).
+- **Chưa làm:** cơ chế "bắt kịp" cho người vào giữa mùa, đêm chung kết, phần thưởng cosmetic cuối mùa, xem hồ sơ người khác.
 
 ### 8.3 Monetization (cosmetic-only)
 

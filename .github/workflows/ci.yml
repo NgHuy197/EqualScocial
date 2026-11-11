@@ -44,3 +44,15 @@ jobs:
 
       - name: Rojo build
         run: rojo build -o EqualSocial.rbxl
+
+      - name: Test logic (harness trên Luau CLI)
+        env:
+          LUAU_VERSION: "0.745"
+        # shell: bash bật pipefail, để test thất bại (luau thoát mã 1) vẫn làm hỏng bước này dù có grep
+        shell: bash
+        run: |
+          curl -sSfL -o luau.zip \
+            "https://github.com/luau-lang/luau/releases/download/${LUAU_VERSION}/luau-ubuntu.zip"
+          unzip -q luau.zip -d luau-bin
+          python3 tests/build_tests.py
+          ./luau-bin/luau tests/out/test_all.luau | grep -v '^  ok'

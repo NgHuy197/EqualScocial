@@ -28,7 +28,14 @@ Type-check `--!strict` bằng luau-lsp (cần file định nghĩa API Roblox `gl
 luau-lsp analyze --platform=roblox --sourcemap=sourcemap.json --definitions=globalTypes.d.luau --ignore="**/Vendor/**" src
 ```
 
-Sau mỗi thay đổi code, tối thiểu phải qua: `stylua --check src`, `selene src`, type-check luau-lsp (không lỗi).
+Test logic (harness chạy service thật trên Luau CLI với môi trường Roblox giả lập; cần Python 3 và [Luau CLI](https://github.com/luau-lang/luau/releases)):
+
+```bash
+python tests/build_tests.py          # ghép src + tests/harness.luau -> tests/out/test_all.luau
+luau tests/out/test_all.luau         # in "KẾT QUẢ: x đạt, y lỗi", thoát mã 1 nếu có lỗi
+```
+
+Sau mỗi thay đổi code, tối thiểu phải qua: `stylua --check src`, `selene src`, type-check luau-lsp (không lỗi) và harness (0 lỗi). CI (`.github/workflows/ci.yml`) chạy đủ các bước này cho mỗi PR. Thêm tính năng phía server thì thêm nhóm kiểm tra vào `tests/harness.luau`.
 
 ## Cấu trúc
 
@@ -44,7 +51,7 @@ src/client  → StarterPlayer.StarterPlayerScripts.Client      init.client.luau,
 - `Services/*` (thứ tự khởi động trong `init.server.luau`): `DataService`, `EconomyService`, `StatsService`, `SkillService`, `JobService`, `StationService`, `ShopService`, `SchoolService`, `CombatService`, `AssetService` (thuê/trả tài sản, phí duy trì, thu hồi), `AuctionService` (đấu giá tài sản hiếm, tiền khóa), `AuraService` (chu kỳ, thuế, sự kiện, lạm phát, Báo cáo), `SeasonService` (thông báo sang mùa, phần Season của snapshot), `PvpService` (hàng chờ, trận 1v1, Elo), `LeaderboardService`, `ReplicationService`. `DataService` có thêm `OnReleasing(cb)` (chạy đồng bộ trước khi dữ liệu người rời game bị gỡ) và `TakeRollover(player)`.
 - `Vendor/ProfileStore`: thư viện ProfileStore (MAD STUDIO, Apache 2.0) giữ **nguyên bản gốc**, không sửa; nguồn và commit ghi trong `SOURCE.txt`. Được loại khỏi StyLua (`.styluaignore`), Selene (`exclude` trong `selene.toml`) và type-check (`--ignore`). Chỉ `DataService` require nó.
 - `Util/*`: `Validate` (kiểm tra dữ liệu/khoảng cách), `RateLimiter`, `Prompts` (gắn ProximityPrompt theo tag có cooldown + kiểm tra khoảng cách phía server), `Describe` (chuỗi mô tả nghề/điều kiện dùng chung), `MonsterModel` (dựng quái và thanh máu), `BoardGui` (vẽ chữ lên bảng xếp hạng 3D), `AssetRegistry` (kho tài sản hiếm toàn cầu trong DataStore, nhận/trả nguyên tử bằng `UpdateAsync`; Studio không API thì dùng bản cục bộ), `Season` (logic thuần sang mùa: lưu lịch sử, trao danh hiệu, reset về template).
-- Client `UI/*`: `Theme`, `HUD`, `Toast`, `ShopWindow`, `LeaderboardWindow`, `AuraWindow` (3 tab Tài sản / Đấu giá / Báo cáo).
+- Client `UI/*`: `Theme`, `HUD`, `Toast`, `ShopWindow`, `LeaderboardWindow`, `AuraWindow` (3 tab Tài sản / Đấu giá / Báo cáo), `ProfileWindow` (Hồ sơ: danh hiệu, lịch sử mùa; mở bằng nút trên HUD hoặc phím P).
 - `WorldBuilder`: dựng map placeholder nếu Workspace chưa có `World`; map thật chỉ cần gắn **tag + attribute** (xem bên dưới).
 
 ## Luật kiến trúc (BẮT BUỘC)
@@ -138,7 +145,9 @@ Chạy trong Studio (Play, hoặc Test → 2 người chơi). Để test nhanh t
 30. **Trận**: hai người vào hàng chờ → dịch chuyển lên hai bục, đếm ngược 3 giây, HUD hiện máu hai bên và thời gian; F (hoặc nút "Đánh") khi trong 10 studs → đối thủ −10 máu, tối đa 1 đòn/giây. Máu nhân vật không đổi, không mất tiền.
 31. **Luật**: hạ gục → thắng (+16 / −16 khi ngang điểm); ra xa tâm > 34 studs → thua; hết 60 giây → nhiều máu hơn thắng, bằng máu → hòa; một người thoát game → người kia thắng. Sau trận cả hai về cạnh quầy, Năng lượng −10, Căng thẳng +8, có XP Sức mạnh.
 32. **Sang mùa** (place thử): tăng tạm `Config.Season.Id` lên 2 → vào game: toast chào Mùa 2, tiền $100, kỹ năng/đồ/tài sản/PvP reset, danh hiệu (nếu đạt) xuất hiện trên HUD. Trả `Id` về 1 (dữ liệu thử đã sang mùa 2 sẽ được coi là mùa khác và bị reset lần nữa, nên chỉ thử trên dữ liệu dev).
-33. **Chống gian lận v0.4**: `PvpAttack:FireServer()` khi không trong trận → không có gì; dồn dập → bị rate-limit, không lỗi.
+33. **Chống gian lận v0.4**: `PvpAttack:FireServer()` khi không trong trận → không có gì; dồn dập → bị rate-limit, không lỗi. `GetProfile:InvokeServer()` hơn 3 lần/10 giây → các lần vượt trả về `nil`.
+33a. **Ghép cặp theo điểm** (3 người chơi trở lên): chênh lệch lớn chỉ được ghép sau khi chờ đủ lâu (100 + 10 × giây chờ); đang có trận thì người khác tiếp tục chờ, không bị dịch chuyển lên bục.
+33b. **Hồ sơ**: nhấn P hoặc nút "Hồ sơ [P]" → cửa sổ hiện điểm PvP, thắng/thua/hòa, tài sản ròng cao nhất, danh hiệu và các mùa trước; nút Đóng bấm được; mở Hồ sơ thì cửa sổ khác tự đóng.
 
 **Kiểm chứng sau khi publish** (cần bạn: File → Publish to Roblox, bật *Enable Studio Access to API Services*, dùng experience dev):
 
@@ -150,11 +159,11 @@ Chạy trong Studio (Play, hoặc Test → 2 người chơi). Để test nhanh t
 ## Điều chưa làm / lưu ý
 
 - `DataService` dùng ProfileStore (khóa phiên): người chơi vào server mới khi server cũ chưa nhả khóa sẽ chờ tối đa ~40 giây; bị server khác giành phiên khi đang chơi thì bị kick (`DataSessionEnded`). Store `EqualSocial_PlayerData_v2` (định dạng ProfileStore); store v1 cũ không được đọc lại (place chưa từng publish nên không có dữ liệu thật). **Chưa kiểm chứng khóa phiên giữa hai server thật** (cần publish và vào 2 server).
-- Chưa có test tự động trong Studio; kiểm tra tự động hiện chỉ gồm biên dịch, type-check, lint và `rojo build`.
+- Chưa có test tự động **trong Studio**; harness `tests/` (chạy cả trong CI) kiểm tra logic server/shared với Roblox giả lập, không kiểm tra UI client hay hành vi engine thật.
 - Đã smoke-test thủ công trong Studio thật (làm nghề, trạm, mua hàng bằng chuột, tự đóng cửa sổ, kiệt sức, chống gian lận qua Remote). **Chưa kiểm chứng lưu/tải bằng DataStore thật** vì place thử chưa publish; cần bạn thử theo mục 9.
 - Công cụ MCP `execute_luau` chạy trong sandbox: không `require` được module dự án và không gọi được RemoteFunction. Muốn test sâu, đặt tạm một Script/LocalScript thử vào place (đừng commit vào `src/`).
 - v0.2 đã smoke-test trong Studio thật (học ở Xưởng, lớp đóng cửa, đánh quái, thua trận → Bệnh xá, panel bảng xếp hạng, giới hạn `GetLeaderboard`). **Chưa kiểm chứng OrderedDataStore thật** (cần publish place).
-- v0.3 đã smoke-test trong Studio thật (mở Trụ sở, thuê Phòng trọ bằng chuột, phí duy trì, đặt giá và chốt phiên Xe thể thao, tab Báo cáo) với registry cục bộ; logic chu kỳ/thuế/sự kiện/lạm phát/đấu giá có harness Luau CLI ngoài repo. **Chưa kiểm chứng registry DataStore thật** (cần publish place).
+- v0.3 đã smoke-test trong Studio thật (mở Trụ sở, thuê Phòng trọ bằng chuột, phí duy trì, đặt giá và chốt phiên Xe thể thao, tab Báo cáo) với registry cục bộ; logic chu kỳ/thuế/sự kiện/lạm phát/đấu giá có harness (`tests/`). **Chưa kiểm chứng registry DataStore thật** (cần publish place).
 - v0.4 đã smoke-test trong Studio (map Đấu trường, dòng Mùa trên HUD, vào/rời hàng chờ, cooldown Giường) nhưng **trận 1v1 chưa chạy với 2 người chơi thật** (MCP chỉ điều khiển một client); logic trận, Elo, luật kết thúc, thoát giữa trận và sang mùa có harness. Hãy chạy mục 30–31 bằng Test → 2 người chơi.
 - UI dựng bằng code: **đừng dựng lại cả danh sách mỗi lần snapshot/mỗi giây**, nút đang bị click sẽ bị huỷ; chỉ dựng lại khi dữ liệu đổi và cập nhật đồng hồ tại chỗ (xem `AuraWindow`).
 - Chuỗi trong `Config.Text` đi qua `string.format` phải viết `%%` cho dấu phần trăm.
