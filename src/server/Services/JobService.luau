@@ -68,7 +68,7 @@ function JobService:Start()
 			ObjectText = Describe.JobTitle(job), -- nghề có điều kiện hiện kèm "(cần ...)"
 			HoldDuration = job.HoldDuration,
 			OnTriggered = function(player: Player)
-				self:_work(player, job)
+				self:_work(player, job, jobId)
 			end,
 			-- Báo sớm nếu quá mệt, đỡ phải giữ phím cả vài giây rồi mới biết
 			OnHoldBegan = function(player: Player)
@@ -116,7 +116,8 @@ function JobService:_canWork(player: Player, job: JobDef): (boolean, string?)
 	return true, nil
 end
 
-function JobService:_work(player: Player, job: JobDef)
+-- jobId (tuỳ chọn) dùng cho sự kiện của AURA: hệ số lương nghề thiếu người và ghi nhận số người đang làm
+function JobService:_work(player: Player, job: JobDef, jobId: string?)
 	local canWork, reason = self:_canWork(player, job)
 	if not canWork then
 		if reason then
@@ -127,10 +128,14 @@ function JobService:_work(player: Player, job: JobDef)
 
 	-- Lương tính theo level TRƯỚC khi cộng XP của lượt này
 	local multiplier = services.Skills:GetPayMultiplier(player, job.Skill)
-	local pay = math.floor(job.BasePay * multiplier + 0.5)
+	local eventBonus = if jobId then services.Aura:GetPayMultiplier(jobId) else 1
+	local pay = math.floor(job.BasePay * multiplier * eventBonus + 0.5)
 	local xp = job.XPReward or Config.JobRules.XPPerShift
 
 	local paid = services.Economy:Add(player, pay, Config.Reasons.Job)
+	if jobId then
+		services.Aura:NoteWork(player, jobId)
+	end
 	services.Stats:Modify(player, job.StatDelta)
 	services.Skills:AddXP(player, job.Skill, xp)
 

@@ -193,12 +193,17 @@ function ShopService:_buy(player: Player, shopId: string, itemId: string): (bool
 		return false, Config.Text.AlreadyOwned
 	end
 
+	-- Giá thực tế = giá gốc x hệ số sự kiện giá của AURA cho nhóm hàng của cửa hàng này
+	local shop = Config.Shops[shopId]
+	local multiplier = if shop then services.Aura:GetPriceMultiplier(shop.Category) else 1
+	local finalPrice = math.floor(item.Price * multiplier + 0.5)
+
 	-- Mọi kiểm tra đã qua: trừ tiền (nguyên tử) rồi trao đồ, không yield ở giữa
-	if not services.Economy:TrySpend(player, item.Price, Config.Reasons.Shop) then
+	if not services.Economy:TrySpend(player, finalPrice, Config.Reasons.Shop) then
 		return false, Config.Text.NotEnoughMoney
 	end
 
-	local price = Format.money(item.Price)
+	local price = Format.money(finalPrice)
 	local message: string
 	if permanent then
 		data.Owned[item.Id] = true

@@ -81,6 +81,8 @@ local function buildTemplate(): PlayerData
 		Skills = skills,
 		Owned = {},
 		Combat = { WindowStart = 0, Earned = 0 },
+		Assets = {},
+		Aura = { LastCycle = 0 },
 	}
 end
 
@@ -120,6 +122,36 @@ local function sanitize(data: PlayerData)
 		data.Combat = { WindowStart = 0, Earned = 0 }
 	else
 		combat.Earned = math.max(0, combat.Earned)
+	end
+
+	-- Tài sản thuê từ AURA: bỏ tài sản không còn trong Config, số hỏng thì đặt lại
+	for assetId, record in data.Assets do
+		if not Config.Assets[assetId] then
+			data.Assets[assetId] = nil
+		elseif
+			not Validate.isFiniteNumber(record.LeasedAt)
+			or not Validate.isFiniteNumber(record.Missed)
+		then
+			data.Assets[assetId] = { LeasedAt = os.time(), Missed = 0 }
+		else
+			record.Missed = math.max(0, math.floor(record.Missed))
+		end
+	end
+
+	local aura = data.Aura
+	if not Validate.isFiniteNumber(aura.LastCycle) then
+		aura.LastCycle = 0
+	end
+	local escrow = aura.Escrow
+	if escrow ~= nil then
+		local valid = type(escrow) == "table"
+			and type(escrow.AuctionId) == "string"
+			and type(escrow.AssetId) == "string"
+			and Validate.isFiniteNumber(escrow.Amount)
+			and escrow.Amount > 0
+		if not valid then
+			aura.Escrow = nil
+		end
 	end
 end
 

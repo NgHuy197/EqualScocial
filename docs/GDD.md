@@ -1,8 +1,8 @@
 # Equal Social — Game Design Document
 
-Phiên bản tài liệu: 0.2 (khớp bản v0.2: MVP + trường học, đánh quái, bảng xếp hạng) · Tên game tạm: **Equal Social** · AI cai quản: **AURA**
+Phiên bản tài liệu: 0.3 (khớp bản v0.3: MVP + trường học, đánh quái, bảng xếp hạng + AURA) · Tên game tạm: **Equal Social** · AI cai quản: **AURA**
 
-> Mọi con số trong tài liệu này là giá trị trong `src/shared/Config.luau`. Khi đổi số liệu, sửa Config **và** cập nhật bảng ở đây. Mục 4 (MVP v0.1) và mục 6 (v0.2) **đã được cài đặt**; mục 7–8 (v0.3, v0.4) là **bản nháp thiết kế**, chưa được cài đặt.
+> Mọi con số trong tài liệu này là giá trị trong `src/shared/Config.luau`. Khi đổi số liệu, sửa Config **và** cập nhật bảng ở đây. Mục 4 (v0.1), 6 (v0.2) và 7 (v0.3) **đã được cài đặt**; mục 8 (v0.4) là **bản nháp thiết kế**, chưa được cài đặt.
 
 ## 1. Tầm nhìn
 
@@ -83,7 +83,7 @@ Không có bệnh tật, không mất kỹ năng, không mất đồ.
 ### 4.4 Tiền
 
 - Bắt đầu $100. Tối đa 1.000.000.000.000 (`MaxMoney`, chặn tràn số).
-- `EconomyService` là nơi **duy nhất** đổi tiền: `Add(player, amount, reason)`, `TrySpend(player, amount, reason)`, `TakePercent(player, percent, reason)`. `reason` hiện có: `job`, `shop`, `exhaustion` (v0.1) và `school`, `monster`, `defeat` (v0.2). Có `OnTransaction(callback)` để AURA đánh thuế/ghi log ở v0.3.
+- `EconomyService` là nơi **duy nhất** đổi tiền: `Add(player, amount, reason)`, `TrySpend(player, amount, reason)`, `TakePercent(player, percent, reason)`. `reason` hiện có: `job`, `shop`, `exhaustion` (v0.1); `school`, `monster`, `defeat` (v0.2); `asset_lease`, `asset_refund`, `maintenance`, `tax`, `auction`, `auction_fee`, `auction_refund` (v0.3). Có `OnTransaction(callback)` để AURA đánh thuế/ghi log ở v0.3.
 - Số tiền luôn là số nguyên không âm.
 
 ### 4.5 Kỹ năng
@@ -150,7 +150,7 @@ Mở bằng ProximityPrompt (nhấn E, không cần giữ). Mua qua RemoteFuncti
 ### 4.10 Chống gian lận (đã áp dụng trong MVP)
 
 - Server tính tất cả; client chỉ hiển thị.
-- Mọi Remote: validate kiểu/độ dài, khoảng cách, rate-limit (`GetState` 4 lần/10 giây, `ShopBuy` 6 lần/3 giây, `GetLeaderboard` 3 lần/10 giây).
+- Mọi Remote: validate kiểu/độ dài, khoảng cách, rate-limit (`GetState` 4 lần/10 giây, `ShopBuy` 6 lần/3 giây, `GetLeaderboard` 3 lần/10 giây, `GetAuraState` 3 lần/10 giây, `AssetLease`/`AssetReturn`/`AuctionBid` 4 lần/5 giây).
 - Mọi ProximityPrompt: kiểm tra người chơi còn sống, khoảng cách (kèm dung sai 6 studs), cooldown theo người chơi.
 - Mua hàng: kiểm tra và ghi trong cùng một bước không yield nên không thể mua đúp bằng request song song.
 
@@ -165,7 +165,9 @@ Có trong v0.1: DataService, chỉ số, tiền, 2 nghề, 2 kỹ năng, 3 trạ
 
 Có thêm trong v0.2 (xem mục 6): lịch trong game, 2 kỹ năng mới (Trí tuệ, Khéo tay), trường học 4 lớp, 2 nghề mở khóa theo level (Kỹ thuật viên, Quản lý), đánh quái ở Bãi luyện tập (Slime Kẹo, Gấu Bông, Bệnh xá), bảng xếp hạng tài sản (bảng 3D + panel UI + HUD).
 
-Chưa có: nhà/xe, AURA, PvP, Season, cosmetic bán bằng Robux, tương tác trực tiếp giữa người chơi (trao đổi, chat bubble tùy biến...).
+Có thêm trong v0.3 (xem mục 7): Trụ sở AURA, tài sản thuê (nhà, xe), phí duy trì và thu hồi, thuế lũy tiến, sự kiện ngẫu nhiên, đấu giá tài sản hiếm, bộ điều chỉnh lạm phát và Báo cáo AURA.
+
+Chưa có: PvP, Season, cosmetic bán bằng Robux, tương tác trực tiếp giữa người chơi (trao đổi, chat bubble tùy biến...).
 
 ## 6. v0.2 — Học tập, đánh quái, bảng xếp hạng (đã triển khai)
 
@@ -285,46 +287,96 @@ Nghề chưa mở khóa vẫn hiện trên map kèm "(cần …)"; làm thử s�
 - Lưu/tải và OrderedDataStore **thật** chưa được kiểm chứng (cần publish place); logic đã được kiểm thử bằng DataStore giả.
 - HUD cao hơn v0.1 (4 kỹ năng, 2 dòng mới); trên màn hình rất nhỏ panel cửa hàng/bảng xếp hạng có thể chồng lên HUD.
 
-## 7. v0.3 — AURA cai quản (bản nháp)
+## 7. v0.3 — AURA cai quản (đã triển khai)
 
-### 7.1 Tài sản là quyền thuê từ AURA
+Số liệu nằm trong `Config.Assets`, `Config.AuraEvents`, `Config.Aura`, `Config.Auction`, `Config.AssetRegistry`. Code: `AuraService`, `AssetService`, `AuctionService`, `Util/AssetRegistry`, cửa sổ `AuraWindow`. Người chơi vào **Trụ sở AURA** (nhấn E) để xem tab Tài sản / Đấu giá / Báo cáo.
 
-- Tài sản (nhà, xe, nội thất lớn) **không bao giờ thuộc về người chơi**: người chơi mua *quyền sử dụng* từ AURA.
-- Mỗi tài sản có **phí duy trì** theo chu kỳ (đề xuất: mỗi 24 phút thực = "1 ngày" trong game). Phí trừ tự động qua `EconomyService` (lý do `maintenance`).
-- Không đủ tiền: AURA cảnh báo; sau **thời gian ân hạn** (đề xuất 3 chu kỳ) mà vẫn không trả thì **thu hồi** tài sản (trả về kho của AURA, có thể được đấu giá lại). Người chơi mất quyền dùng nhưng không bị phạt thêm.
-- Dữ liệu: `Assets = { [assetId] = { LeasedAt, PaidUntil, FeePerCycle, Missed } }`; `Owned` của MVP (đồ thời trang) giữ nguyên là đồ cá nhân vĩnh viễn nhưng cosmetic.
+### 7.1 Chu kỳ AURA
 
-### 7.2 Thuế lũy tiến người giàu
+- **1 chu kỳ = 1 ngày game = 10 phút thực** (`Aura.CycleSeconds = Calendar.DayLengthSeconds`; bản nháp trước đề xuất 24 phút, đã đổi cho khớp lịch v0.2).
+- Chu kỳ tính từ giờ server nên mọi máy chủ cùng nhịp. Mỗi người chỉ được xử lý **một lần mỗi chu kỳ** (`data.Aura.LastCycle`), nên chuyển server giữa chừng không bị tính phí hai lần.
+- **Không tính phí khi ngoại tuyến**: lúc vào game, `LastCycle` được đưa về chu kỳ hiện tại.
 
-- AURA định kỳ đánh thuế theo **bậc thang tài sản ròng** (chỉ phần vượt ngưỡng của từng bậc). Ví dụ đề xuất:
-
-| Phần tài sản ròng | Thuế suất mỗi chu kỳ |
+| Việc | Tần suất |
 | --- | --- |
-| Đến $5.000 | 0% |
-| $5.000 – $20.000 | 1% |
-| $20.000 – $100.000 | 3% |
-| Trên $100.000 | 6% |
+| Phí duy trì tài sản | mỗi chu kỳ |
+| Thu thuế | mỗi 3 chu kỳ (30 phút) |
+| Bắt đầu sự kiện (nếu chưa có) | mỗi 2 chu kỳ |
+| Mở phiên đấu giá | mỗi 6 chu kỳ (60 phút) |
+| Kiểm tra lạm phát | mỗi 3 chu kỳ |
 
-- Người chơi thấy rõ biểu thuế và số thuế sắp tới (minh bạch để cảm giác "công bằng, không bất ngờ"). Lý do giao dịch `tax`.
-- Thuế đi vào quỹ của AURA (bị hủy khỏi nền kinh tế) hoặc một phần dùng trả thưởng sự kiện.
+### 7.2 Tài sản là quyền thuê từ AURA
 
-### 7.3 Sự kiện ngẫu nhiên do AURA phát
+Tài sản **không bao giờ thuộc về người chơi**: trả **giá thuê một lần** (không hoàn) rồi **phí duy trì mỗi chu kỳ**. Mỗi loại thuê tối đa một cái. Tài sản đang thuê cộng vào **Nổi tiếng** và **tài sản ròng** (theo giá thuê).
 
-- **Khủng hoảng giá**: giá một nhóm hàng tăng/giảm tạm thời (ví dụ đồ ăn ×1,5 trong 10 phút), có thông báo toàn server.
-- **Thưởng nghề thiếu người**: AURA theo dõi số người đang làm từng nghề; nghề có ít người nhất được **+25% lương** trong một khoảng thời gian, khuyến khích người chơi cân bằng thị trường lao động.
-- Các sự kiện khác (đề xuất): giảm giá cuối tuần, kiểm kê tài sản, "ngày không thuế".
-- Sự kiện chọn ngẫu nhiên có trọng số nhưng **luôn công khai và áp dụng cho mọi người như nhau**.
+| Tài sản | Loại | Giá thuê | Phí/chu kỳ | Nổi tiếng |
+| --- | --- | --- | --- | --- |
+| Xe máy | xe | $800 | $8 | +15 |
+| Phòng trọ | nhà | $1.000 | $10 | +20 |
+| Căn hộ | nhà | $4.000 | $40 | +60 |
+| Ô tô | xe | $5.000 | $60 | +80 |
+| Biệt thự (hiếm, kho 3) | nhà | $20.000 | $200 | +250 |
+| Xe thể thao (hiếm, kho 2) | xe | $30.000 | $300 | +400 |
 
-### 7.4 Đấu giá tài sản hiếm
+- Phí thực tế = phí gốc × **hệ số chính sách** (7.6), làm tròn.
+- **Không đủ tiền**: ghi nợ 1 chu kỳ và cảnh báo. Lần trả kế tiếp **trả bù** mọi chu kỳ đã nợ. Nợ **quá 3 chu kỳ** (`GraceCycles`) thì AURA **thu hồi**; không phạt thêm tiền.
+- **Trả lại** tài sản: không hoàn tiền (`ReturnRefundPercent = 0`).
+- **Tài sản hiếm** chỉ có qua đấu giá. Kho giới hạn **toàn cầu**: một registry trong DataStore `EqualSocial_AssetRegistry_S1`, nhận/trả bằng `UpdateAsync` nên không cấp trùng giữa các server. Studio không có DataStore thì dùng registry cục bộ (báo trong Báo cáo); server thật mà DataStore lỗi thì **từ chối**, không bao giờ tự rơi về cục bộ.
 
-- Tài sản hiếm (số lượng giới hạn mỗi mùa) được **đấu giá** công khai: giá khởi điểm do AURA đặt, người trả cao nhất thắng, tiền thắng đấu giá **bị hủy** (hút tiền).
-- Quy tắc chống thao túng: khóa tiền khi đặt giá, phí đặt giá không hoàn lại một phần nhỏ, giới hạn số phiên tham gia cùng lúc.
+### 7.3 Thuế lũy tiến
 
-### 7.5 Hút tiền khỏi hệ thống (chống lạm phát)
+Theo **tài sản ròng** (tiền + đồ vĩnh viễn + tài sản đang thuê), chỉ phần vượt ngưỡng của từng bậc chịu thuế suất của bậc đó, nhân hệ số chính sách. Thu tối đa bằng số tiền đang có (không âm, không ghi nợ thuế). Tiền thuế bị hủy.
 
-- Các "cống thoát" tiền: phí duy trì, thuế, tiền thắng đấu giá, học phí, phí hồi sinh, phí vé đấu trường.
-- AURA theo dõi **lượng tiền trung bình trên mỗi người chơi** và tỉ lệ tiền vào/ra, rồi điều chỉnh từ từ (giá đồ, phí duy trì, biểu thuế) theo hướng ổn định; mọi điều chỉnh được ghi nhật ký công khai trong một "Báo cáo của AURA".
-- Giới hạn mức thay đổi mỗi lần (đề xuất ≤ 10%) để không gây sốc.
+| Phần tài sản ròng | Thuế suất mỗi kỳ (30 phút) | Ví dụ thuế mỗi kỳ |
+| --- | --- | --- |
+| Đến $5.000 | 0% | $5.000 → $0 |
+| $5.000 – $20.000 | 1% | $10.000 → $50; $20.000 → $150 |
+| $20.000 – $100.000 | 3% | $50.000 → $1.050; $100.000 → $2.550 |
+| Trên $100.000 | 6% | $200.000 → $8.550 |
+
+### 7.4 Sự kiện ngẫu nhiên
+
+Bốc thăm theo trọng số, mỗi lúc một sự kiện, công khai (toast toàn server, dòng AURA trên HUD) và áp cho mọi người như nhau.
+
+| Sự kiện | Hiệu ứng | Thời gian | Trọng số |
+| --- | --- | --- | --- |
+| Khủng hoảng lương thực | giá đồ ăn ×1,5 | 10 phút | 3 |
+| Khuyến mãi đồ ăn | giá đồ ăn ×0,7 | 10 phút | 2 |
+| Thiếu lao động | nghề ít người làm nhất ×1,25 lương (cần ≥ 2 người chơi; chỉ chọn nghề có người làm được) | 10 phút | 3 |
+| Ngày không thuế | miễn kỳ thuế kế tiếp | 10 phút | 1 |
+
+"Đang làm nghề" = hoàn thành một lượt trong 120 giây gần nhất. Giá cửa hàng tính theo nhóm hàng (`ShopDef.Category`).
+
+### 7.5 Đấu giá tài sản hiếm
+
+| Mục | Giá trị |
+| --- | --- |
+| Giá khởi điểm | 60% giá thuê |
+| Thời lượng | 120 giây |
+| Bước tăng tối thiểu | 10% |
+| Phí đặt giá | 2%, không hoàn |
+| Chống chốt phút chót | đặt giá trong 10 giây cuối → cộng 10 giây |
+| Số phiên cùng lúc | 1 mỗi server |
+
+- Tiền **khóa ngay** khi đặt giá; bị vượt giá thì **hoàn ngay**. Tiền khóa được ghi vào dữ liệu người chơi (`data.Aura.Escrow`): thoát giữa chừng thì lần vào sau được hoàn.
+- Người dẫn đầu rời server ⇒ phiên bị hủy.
+- Hết giờ: người cao nhất nhận tài sản qua registry (nguyên tử). **Tiền thắng bị hủy.** Hết kho trong lúc đấu giá (server khác đã nhận) ⇒ hoàn giá, phí không hoàn.
+
+### 7.6 Bộ điều chỉnh lạm phát và Báo cáo AURA
+
+- Mỗi 3 chu kỳ so **tiền trung bình** của người chơi online với mục tiêu **$5.000**. Lệch dưới ±10% thì giữ; còn lại đổi hệ số chính sách theo bước = (trung bình/mục tiêu − 1) × 0,25, tối đa ±10% mỗi lần, giới hạn **0,5 – 2,0**. Hệ số nhân vào phí duy trì và thuế.
+- Mọi điều chỉnh được ghi vào **nhật ký công khai** (10 dòng gần nhất) và thông báo toàn server.
+- Tab Báo cáo hiện: chu kỳ và thời gian còn lại, sự kiện, hệ số chính sách, thời điểm thuế và thuế dự kiến của bạn, tiền trung bình, tiền vào/ra chu kỳ trước, biểu thuế, nhật ký.
+- Phân loại dòng tiền (`Aura.FlowReasons`): vào = `job`, `monster`; ra = mua hàng, học phí, phí thua trận, kiệt sức, thuê, phí duy trì, thuế, đặt giá, phí đặt giá; hoàn tiền trừ ngược phần ra.
+- Bộ điều chỉnh chạy **theo từng server** (không chia sẻ giữa server).
+
+### 7.7 Phân tích và hạn chế của v0.3
+
+- **Hút tiền còn yếu so với thu nhập tối ưu.** Trạm miễn phí không cooldown (câu hỏi mở 1) cho phép Quản lý Lv0 kiếm ≈ $17.000/giờ; giữ cả 4 tài sản thường chỉ tốn $708/giờ, thuế ở mốc $20.000 là $300/giờ. Bộ điều chỉnh có thể thường xuyên chạm trần 2,0.
+- Tài sản hiếm của người bỏ game không bị thu hồi (vì không tính phí ngoại tuyến) cho tới khi có Season.
+- Mỗi server có hệ số chính sách riêng.
+- Registry DataStore và lưu/tải thật chưa được kiểm chứng (cần publish place); logic đã kiểm thử bằng DataStore giả và registry cục bộ trong Studio.
+- Số chu kỳ hiển thị là số tuyệt đối tính từ giờ server (rất lớn).
 
 ## 8. v0.4 — PvP có luật và Season (bản nháp)
 
@@ -383,3 +435,7 @@ Nghề chưa mở khóa vẫn hiện trên map kèm "(cần …)"; làm thử s�
 21. **Học phí cao ở level cao.** Lv20 tốn ≈ $25.640 qua trường học, làm nghề thì miễn phí nhưng chậm hơn khoảng 2 lần. Đây có phải đánh đổi mong muốn, hay cần giảm hệ số học phí?
 22. **Lịch lớp học.** Lớp chỉ mở 3–4 ngày/tuần (70 phút thực/tuần). Người chơi vào sai ngày có thấy bị chặn không? Có cần hiện đếm ngược tới ngày lớp mở?
 23. **Gian lận bảng xếp hạng.** Hiện chỉ ghi cảnh báo. Khi nào cần cơ chế gỡ người chơi khỏi bảng hoặc khoá tài khoản nghi vấn?
+24. **Tài sản có công dụng không?** Nhà/xe v0.3 chỉ cho Nổi tiếng và tài sản ròng. Có nên thêm công dụng (giường riêng, đi nhanh hơn) mà không tạo lợi thế kiếm tiền quá lớn?
+25. **Phí ngoại tuyến và tài sản hiếm bị bỏ quên.** Không tính phí ngoại tuyến nên người bỏ game giữ tài sản hiếm mãi. Có cần cơ chế thu hồi sau X ngày vắng mặt trước khi có Season?
+26. **AURA theo từng server.** Hệ số chính sách khác nhau giữa server. Có cần đồng bộ (MessagingService / MemoryStore)?
+27. **Mục tiêu tiền trung bình $5.000** có phù hợp khi thu nhập tối ưu hiện rất cao (xem 7.7)?

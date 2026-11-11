@@ -2,7 +2,7 @@
 
 Game Roblox nhiều người chơi: một xã hội mà **mọi người xuất phát như nhau** (cùng tiền, cùng chỉ số, không gia thế, không bệnh tật) và cạnh tranh công bằng bằng cách học skill, làm nghề, luyện tập, rồi mua tài sản để khoe. Mọi tài sản thuộc về siêu máy tính AI **AURA**. Lối chơi giống Stardew Valley + The Sims nhưng đề cao tương tác và cạnh tranh giữa người chơi.
 
-Trạng thái: **v0.2** (MVP v0.1 + trường học, đánh quái, bảng xếp hạng). Chữ hiển thị trong game là tiếng Việt.
+Trạng thái: **v0.3** (MVP v0.1 + trường học, đánh quái, bảng xếp hạng + AURA cai quản tài sản). Chữ hiển thị trong game là tiếng Việt.
 
 Tài liệu: [docs/GDD.md](docs/GDD.md) (thiết kế, công thức, lộ trình) · [CLAUDE.md](CLAUDE.md) (luật kiến trúc, checklist test cho người và Claude Code).
 
@@ -20,6 +20,14 @@ Tài liệu: [docs/GDD.md](docs/GDD.md) (thiết kế, công thức, lộ trình
 - **Nghề mở khóa theo level**: Kỹ thuật viên (Khéo tay Lv3), Quản lý (Trí tuệ Lv5 + Giao tiếp Lv3).
 - **Đánh quái** ở Bãi luyện tập (Slime Kẹo, Gấu Bông): nhấn E để đánh, chia thưởng khi đánh nhóm, trần tiền $5.000/giờ, thua trận thì trả phí và hồi sinh ở Bệnh xá.
 - **Bảng xếp hạng tài sản**: bảng 3D ở quảng trường, panel top 50, hạng hiện trên HUD (OrderedDataStore; không có API thì dùng bảng cục bộ).
+
+**v0.3**
+- **Trụ sở AURA** (nhấn E): cửa sổ 3 tab Tài sản / Đấu giá / Báo cáo; chu kỳ AURA = 1 ngày game (10 phút thực).
+- **Tài sản thuê** (Xe máy, Phòng trọ, Căn hộ, Ô tô): giá thuê một lần + phí duy trì mỗi chu kỳ, cộng Nổi tiếng và tài sản ròng; nợ quá 3 chu kỳ thì bị thu hồi.
+- **Thuế lũy tiến** mỗi 30 phút theo tài sản ròng (0% / 1% / 3% / 6%).
+- **Sự kiện ngẫu nhiên**: khủng hoảng hoặc khuyến mãi đồ ăn, thiếu lao động (+25% lương), ngày không thuế.
+- **Đấu giá tài sản hiếm** (Biệt thự, Xe thể thao; kho giới hạn toàn cầu): tiền khóa khi đặt giá, phí 2%, chống chốt phút chót.
+- **Bộ điều chỉnh lạm phát** công khai: hệ số chính sách 0,5–2,0 nhân vào phí và thuế, nhật ký trong tab Báo cáo.
 
 ## Cài đặt từng bước
 
@@ -78,7 +86,7 @@ Nếu chưa làm 2 bước này, game **vẫn chạy được** nhưng ở chế
 
 ### 6. Chơi thử
 
-Nhấn **Play** (F5). Map placeholder tự dựng (các khối có nhãn), xung quanh điểm xuất phát ở gốc toạ độ: 4 nghề ở x = −60, 3 trạm (Vòi tắm / Giường / Ghế công viên) ở x = +60, 2 cửa hàng ở z = −70, bảng xếp hạng 3D ở z = +45, 4 lớp học ở z = +75, Bãi luyện tập quanh z = +120 và Bệnh xá ở (−75, 120). Đến gần khối, giữ **E** để làm việc/học/dùng trạm, nhấn **E** ở cửa hàng, bảng xếp hạng hoặc vào quái để mở cửa sổ/đánh quái.
+Nhấn **Play** (F5). Map placeholder tự dựng (các khối có nhãn), xung quanh điểm xuất phát ở gốc toạ độ: 4 nghề ở x = −60, 3 trạm (Vòi tắm / Giường / Ghế công viên) ở x = +60, 2 cửa hàng ở z = −70, bảng xếp hạng 3D ở z = +45, Trụ sở AURA ở (65, 55), 4 lớp học ở z = +75, Bãi luyện tập quanh z = +120 và Bệnh xá ở (−75, 120). Đến gần khối, giữ **E** để làm việc/học/dùng trạm, nhấn **E** ở cửa hàng, bảng xếp hạng, Trụ sở AURA hoặc vào quái để mở cửa sổ/đánh quái.
 
 > Prompt **E** của Roblox chỉ hiện khi khối nằm trong tầm nhìn camera: hãy quay mặt về phía khối.
 
@@ -90,8 +98,8 @@ Checklist test đầy đủ ở [CLAUDE.md](CLAUDE.md#checklist-test-thủ-công
 default.project.json   rokit.toml   selene.toml   stylua.toml
 src/
   shared/   Config.luau (mọi số liệu + chữ), Remotes, Format, Types, Calendar
-  server/   init.server.luau, WorldBuilder.luau, Services/ (11 service), Util/
-  client/   init.client.luau, UI/ (Theme, HUD, Toast, ShopWindow, LeaderboardWindow)
+  server/   init.server.luau, WorldBuilder.luau, Services/ (14 service), Util/
+  client/   init.client.luau, UI/ (Theme, HUD, Toast, ShopWindow, LeaderboardWindow, AuraWindow)
 docs/GDD.md
 ```
 
@@ -154,5 +162,6 @@ Repo [Roblox/studio-rust-mcp-server](https://github.com/Roblox/studio-rust-mcp-s
 
 ## Ghi chú
 
+- Registry tài sản hiếm và lưu/tải thật chưa kiểm chứng trên place đã publish.
 - Chưa có session locking cho dữ liệu (TODO chuyển sang ProfileStore).
 - Robux chỉ bán cosmetic; không nội dung lãng mạn hay chính trị đời thực (xem [CLAUDE.md](CLAUDE.md) và GDD).

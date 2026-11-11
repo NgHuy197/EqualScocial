@@ -36,6 +36,7 @@ type Fields = {
 	Anchor: BasePart?,
 	FallbackPosition: Vector3?, -- dùng khi không tìm thấy điểm neo phía client
 	State: Types.Snapshot?,
+	PriceMultipliers: { [string]: number }, -- hệ số giá theo nhóm hàng do sự kiện AURA đặt
 	Elapsed: number,
 	Monitor: RBXScriptConnection?,
 	OnBuy: (shopId: string, itemId: string) -> (),
@@ -182,6 +183,7 @@ function ShopWindow.new(
 		Anchor = nil,
 		FallbackPosition = nil,
 		State = nil,
+		PriceMultipliers = {},
 		Elapsed = 0,
 		Monitor = nil,
 		OnBuy = onBuy,
@@ -256,6 +258,22 @@ function ShopWindow._buildRow(self: ShopWindow, item: ItemDef, order: number)
 	end)
 end
 
+-- Giá hiển thị = giá gốc x hệ số sự kiện của nhóm hàng (server mới là nơi quyết định giá thật khi mua)
+function ShopWindow._priceOf(self: ShopWindow, item: ItemDef): number
+	local shopId = self.ShopId
+	local shop = if shopId then Config.Shops[shopId] else nil
+	local multiplier = if shop then self.PriceMultipliers[shop.Category] or 1 else 1
+	return math.floor(item.Price * multiplier + 0.5)
+end
+
+-- Cập nhật hệ số giá từ trạng thái AURA
+function ShopWindow.SetPriceMultipliers(self: ShopWindow, multipliers: { [string]: number })
+	self.PriceMultipliers = multipliers
+	if self.Root.Visible then
+		self:_refreshButtons()
+	end
+end
+
 function ShopWindow._refreshButtons(self: ShopWindow)
 	local state = self.State
 	for _, row in self.Rows do
@@ -271,8 +289,9 @@ function ShopWindow._refreshButtons(self: ShopWindow)
 			button.BackgroundColor3 = Theme.Colors.Disabled
 			button.AutoButtonColor = false
 		else
-			local affordable = state ~= nil and state.Money >= item.Price
-			button.Text = string.format(Config.Text.ShopBuy, Format.money(item.Price))
+			local price: number = self:_priceOf(item)
+			local affordable = state ~= nil and state.Money >= price
+			button.Text = string.format(Config.Text.ShopBuy, Format.money(price))
 			button.BackgroundColor3 = if affordable
 				then Theme.Colors.Accent
 				else Theme.Colors.Disabled

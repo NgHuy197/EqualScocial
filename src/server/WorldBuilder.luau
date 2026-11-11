@@ -142,6 +142,25 @@ local function placeGroup(
 	end
 end
 
+-- Trụ sở AURA: nhấn E để mở cửa sổ Tài sản / Đấu giá / Báo cáo (AuraService gắn prompt theo tag)
+local function buildAuraHq(world: Folder)
+	local size = Config.World.AuraSize
+	local origin = Config.World.AuraOrigin
+	local block = newBlock(
+		"AuraHq",
+		size,
+		origin + Vector3.new(0, size.Y / 2, 0),
+		Color3.fromRGB(86, 64, 150)
+	)
+	addLabel(
+		block,
+		Config.Text.AuraLabel,
+		string.format(Config.Text.WorldHintTap, Config.Text.AuraPrompt)
+	)
+	block.Parent = world
+	CollectionService:AddTag(block, Config.Tags.Aura)
+end
+
 -- Bảng xếp hạng 3D ở quảng trường. LeaderboardService tự vẽ nội dung lên mặt trước (-Z) của part này.
 local function buildLeaderboard(world: Folder)
 	local size = Config.World.LeaderboardSize
@@ -395,6 +414,7 @@ function WorldBuilder.Build()
 	)
 
 	buildLeaderboard(world)
+	buildAuraHq(world)
 	buildInfirmary(world)
 	local spawnCount = buildMonsterZone(world)
 

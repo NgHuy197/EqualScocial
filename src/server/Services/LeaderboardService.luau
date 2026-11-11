@@ -174,7 +174,9 @@ function LeaderboardService:GetNetWorth(player: Player): number
 	if not data then
 		return lastKnown[player.UserId] or 0
 	end
-	local value = data.Money + services.Shop:GetOwnedValue(player)
+	local value = data.Money
+		+ services.Shop:GetOwnedValue(player)
+		+ services.Assets:GetValue(player)
 	lastKnown[player.UserId] = value
 	return value
 end

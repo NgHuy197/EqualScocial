@@ -22,13 +22,34 @@ local WAIT_TIMEOUT = 30
 --   Notify(text, kind)      : thông báo toast
 --   OpenShop(shopId)        : mở cửa sổ cửa hàng sau khi ProximityPrompt kích hoạt
 --   OpenLeaderboard()       : mở panel bảng xếp hạng sau khi ProximityPrompt của bảng kích hoạt
-local EVENTS = { "StateUpdate", "Notify", "OpenShop", "OpenLeaderboard" }
+--   OpenAura()              : mở cửa sổ Trụ sở AURA sau khi ProximityPrompt kích hoạt
+--   AuraUpdate(auraState)   : trạng thái chung của AURA (sự kiện, đấu giá, hệ số...) cho mọi người chơi
+local EVENTS = {
+	"StateUpdate",
+	"Notify",
+	"OpenShop",
+	"OpenLeaderboard",
+	"OpenAura",
+	"AuraUpdate",
+}
 
 -- Client -> Server (có trả về)
 --   GetState()                    -> snapshot
 --   ShopBuy(shopId, itemId)       -> ok: boolean, message: string
 --   GetLeaderboard()              -> Types.LeaderboardView (nil nếu bị rate-limit)
-local FUNCTIONS = { "GetState", "ShopBuy", "GetLeaderboard" }
+--   GetAuraState()                -> Types.AuraView (nil nếu bị rate-limit)
+--   AssetLease(assetId)           -> ok: boolean, message: string
+--   AssetReturn(assetId)          -> ok: boolean, message: string
+--   AuctionBid(amount)            -> ok: boolean, message: string
+local FUNCTIONS = {
+	"GetState",
+	"ShopBuy",
+	"GetLeaderboard",
+	"GetAuraState",
+	"AssetLease",
+	"AssetReturn",
+	"AuctionBid",
+}
 
 local Remotes = {}
 

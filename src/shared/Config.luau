@@ -70,6 +70,29 @@ export type MonsterDef = {
 	Size: Vector3,
 }
 
+export type AssetKind = "house" | "vehicle"
+
+export type AssetDef = {
+	Name: string,
+	Kind: AssetKind,
+	Price: number, -- giá thuê trả một lần khi thuê (không hoàn)
+	FeePerCycle: number, -- phí duy trì mỗi chu kỳ AURA (trước hệ số chính sách)
+	Fame: number, -- cộng vào Nổi tiếng khi đang thuê
+	Stock: number?, -- chỉ tài sản hiếm: kho toàn cầu; chỉ có được qua đấu giá
+}
+
+export type AuraEventKind = "price" | "job_bonus" | "tax_holiday"
+
+export type AuraEventDef = {
+	Name: string,
+	Kind: AuraEventKind,
+	Weight: number, -- trọng số khi bốc thăm
+	DurationSeconds: number,
+	Category: string?, -- chỉ "price": nhóm hàng (ShopDef.Category)
+	Multiplier: number?, -- "price": nhân giá; "job_bonus": nhân lương
+	Announce: string, -- "job_bonus" có một %s cho tên nghề
+}
+
 export type StationDef = {
 	Name: string,
 	ActionText: string,
@@ -95,6 +118,7 @@ export type ItemDef = {
 export type ShopDef = {
 	Name: string,
 	ActionText: string,
+	Category: string, -- nhóm hàng cho sự kiện giá của AURA (ví dụ "food")
 	Items: { ItemDef },
 	Color: Color3?,
 	Size: Vector3?,
@@ -183,6 +207,13 @@ local Reasons = {
 	School = "school", -- học phí
 	Monster = "monster", -- tiền thưởng hạ quái
 	Defeat = "defeat", -- phí Bệnh xá khi thua trận
+	AssetLease = "asset_lease", -- giá thuê tài sản (trả một lần)
+	AssetRefund = "asset_refund", -- hoàn tiền khi trả lại tài sản (nếu ReturnRefundPercent > 0)
+	Maintenance = "maintenance", -- phí duy trì tài sản mỗi chu kỳ
+	Tax = "tax", -- thuế lũy tiến của AURA
+	Auction = "auction", -- tiền đặt giá (khóa ngay khi đặt)
+	AuctionFee = "auction_fee", -- phí đặt giá, không hoàn
+	AuctionRefund = "auction_refund", -- hoàn tiền đặt giá khi bị vượt giá / đấu giá hủy
 }
 
 -- ───────────────────────────── Kỹ năng ─────────────────────────────
@@ -410,6 +441,135 @@ local Leaderboard = {
 	OpenCooldown = 1, -- giây giữa hai lần mở bảng
 }
 
+-- ───────────────────────────── AURA (v0.3) ─────────────────────────────
+-- Một "chu kỳ AURA" = một ngày game (Calendar.DayLengthSeconds). Chu kỳ tính từ giờ server nên mọi
+-- máy chủ cùng nhịp. Phí duy trì chỉ tính khi người chơi đang online (không tính phí ngoại tuyến).
+
+local Assets: { [string]: AssetDef } = {
+	boarding = { Name = "Phòng trọ", Kind = "house", Price = 1000, FeePerCycle = 10, Fame = 20 },
+	motorbike = { Name = "Xe máy", Kind = "vehicle", Price = 800, FeePerCycle = 8, Fame = 15 },
+	apartment = { Name = "Căn hộ", Kind = "house", Price = 4000, FeePerCycle = 40, Fame = 60 },
+	car = { Name = "Ô tô", Kind = "vehicle", Price = 5000, FeePerCycle = 60, Fame = 80 },
+	-- Tài sản hiếm: kho giới hạn toàn cầu (registry DataStore), chỉ có được qua đấu giá
+	villa = {
+		Name = "Biệt thự",
+		Kind = "house",
+		Price = 20000,
+		FeePerCycle = 200,
+		Fame = 250,
+		Stock = 3,
+	},
+	sportscar = {
+		Name = "Xe thể thao",
+		Kind = "vehicle",
+		Price = 30000,
+		FeePerCycle = 300,
+		Fame = 400,
+		Stock = 2,
+	},
+}
+
+local AuraEvents: { [string]: AuraEventDef } = {
+	food_crisis = {
+		Name = "Khủng hoảng lương thực",
+		Kind = "price",
+		Category = "food",
+		Multiplier = 1.5,
+		Weight = 3,
+		DurationSeconds = 600,
+		Announce = "Giá đồ ăn tăng ×1,5 trong 10 phút.",
+	},
+	food_sale = {
+		Name = "Khuyến mãi đồ ăn",
+		Kind = "price",
+		Category = "food",
+		Multiplier = 0.7,
+		Weight = 2,
+		DurationSeconds = 600,
+		Announce = "Giá đồ ăn giảm 30% trong 10 phút.",
+	},
+	labor_shortage = {
+		Name = "Thiếu lao động",
+		Kind = "job_bonus",
+		Multiplier = 1.25,
+		Weight = 3,
+		DurationSeconds = 600,
+		Announce = "Nghề %s đang thiếu người: lương +25%% trong 10 phút.", -- %% vì đi qua string.format
+	},
+	tax_holiday = {
+		Name = "Ngày không thuế",
+		Kind = "tax_holiday",
+		Weight = 1,
+		DurationSeconds = 600,
+		Announce = "AURA miễn thuế ở kỳ thu thuế kế tiếp.",
+	},
+}
+
+local Aura = {
+	CycleSeconds = Calendar.DayLengthSeconds,
+	GraceCycles = 3, -- nợ phí duy trì quá ngần này chu kỳ thì bị thu hồi
+	TaxEveryCycles = 3, -- thu thuế mỗi 3 chu kỳ
+	EventEveryCycles = 2, -- cứ 2 chu kỳ thử bắt đầu một sự kiện (mỗi lúc chỉ một sự kiện)
+	AuctionEveryCycles = 6, -- cứ 6 chu kỳ mở một phiên đấu giá tài sản hiếm
+	InflationEveryCycles = 3, -- cứ 3 chu kỳ kiểm tra lạm phát
+	ActiveWorkerSeconds = 120, -- "đang làm nghề" = đã hoàn thành một lượt trong ngần này giây
+	JobBonusMinPlayers = 2, -- sự kiện Thiếu lao động cần tối thiểu ngần này người chơi
+	ReturnRefundPercent = 0, -- trả lại tài sản được hoàn bao nhiêu % giá thuê (0 = không hoàn)
+	-- Thuế lũy tiến theo tài sản ròng: chỉ phần vượt ngưỡng của từng bậc chịu thuế suất của bậc đó
+	TaxBrackets = {
+		{ Upto = 5000, Rate = 0 },
+		{ Upto = 20000, Rate = 0.01 },
+		{ Upto = 100000, Rate = 0.03 },
+		{ Upto = math.huge, Rate = 0.06 },
+	},
+	-- Bộ điều chỉnh lạm phát (theo từng server): đổi hệ số chính sách nhân vào phí duy trì và thuế
+	Inflation = {
+		TargetAvgMoney = 5000, -- tiền trung bình mục tiêu trên mỗi người chơi
+		DeadBand = 0.10, -- lệch dưới ±10% so với mục tiêu thì giữ nguyên
+		Gain = 0.25, -- bước = (trungBình / mụcTiêu - 1) * Gain
+		MaxStep = 0.10, -- mỗi lần đổi tối đa ±10%
+		MinMultiplier = 0.5,
+		MaxMultiplier = 2.0,
+		LogSize = 10, -- số dòng nhật ký công khai giữ lại
+	},
+	-- Phân loại giao dịch cho "Báo cáo AURA": in = tiền sinh ra, out = tiền bị hút, refund = hoàn lại
+	FlowReasons = {
+		job = "in",
+		monster = "in",
+		shop = "out",
+		school = "out",
+		defeat = "out",
+		exhaustion = "out",
+		asset_lease = "out",
+		maintenance = "out",
+		tax = "out",
+		auction = "out",
+		auction_fee = "out",
+		auction_refund = "refund",
+		asset_refund = "refund",
+	} :: { [string]: string },
+	BroadcastInterval = 0.5, -- giây giữa hai lần gửi trạng thái AURA cho client (khi có thay đổi)
+	OpenCooldown = 1, -- giây giữa hai lần mở Trụ sở AURA
+	PanelCloseDistance = 25, -- client tự đóng cửa sổ khi đi xa hơn (studs)
+}
+
+local Auction = {
+	DurationSeconds = 120,
+	StartPercent = 0.60, -- giá khởi điểm = StartPercent * giá thuê
+	MinRaisePercent = 0.10, -- mỗi lần đặt giá phải cao hơn giá cao nhất ít nhất 10%
+	BidFeePercent = 0.02, -- phí đặt giá, KHÔNG hoàn lại
+	AntiSnipeWindowSeconds = 10, -- đặt giá trong ngần này giây cuối...
+	AntiSnipeExtendSeconds = 10, -- ...thì phiên được cộng thêm ngần này giây
+	CheckSeconds = 1, -- chu kỳ kiểm tra hết giờ
+}
+
+-- Registry toàn cầu cho tài sản hiếm: ai đang giữ cái nào (nhận bằng UpdateAsync nên không bị cấp trùng)
+local AssetRegistry = {
+	StoreName = "EqualSocial_AssetRegistry_S1", -- hậu tố là SeasonId
+	Key = "registry",
+	CacheSeconds = 30, -- đọc số lượng còn lại tối đa mỗi 30 giây
+}
+
 -- ───────────────────────────── Trạm miễn phí ─────────────────────────────
 
 local Stations: { [string]: StationDef } = {
@@ -448,6 +608,7 @@ local Shops: { [string]: ShopDef } = {
 	restaurant = {
 		Name = "Quán ăn",
 		ActionText = "Vào quán ăn",
+		Category = "food",
 		Color = Color3.fromRGB(235, 140, 65),
 		Size = Vector3.new(16, 9, 12),
 		Items = {
@@ -477,6 +638,7 @@ local Shops: { [string]: ShopDef } = {
 	fashion = {
 		Name = "Cửa hàng thời trang",
 		ActionText = "Vào cửa hàng",
+		Category = "fashion",
 		Color = Color3.fromRGB(155, 95, 205),
 		Size = Vector3.new(16, 9, 12),
 		Items = {
@@ -515,6 +677,10 @@ local RateLimits = {
 	GetState = { Calls = 4, Window = 10 }, -- tối đa 4 lần / 10 giây
 	ShopBuy = { Calls = 6, Window = 3 }, -- tối đa 6 lần / 3 giây
 	GetLeaderboard = { Calls = 3, Window = 10 }, -- tối đa 3 lần / 10 giây
+	GetAuraState = { Calls = 3, Window = 10 },
+	AssetLease = { Calls = 4, Window = 5 },
+	AssetReturn = { Calls = 4, Window = 5 },
+	AuctionBid = { Calls = 4, Window = 5 },
 }
 
 local Replication = {
@@ -537,7 +703,7 @@ local Data = {
 -- ───────────────────────────── Thông báo & UI ─────────────────────────────
 
 local Notify = {
-	Kinds = { "info", "success", "warning", "error", "levelup" },
+	Kinds = { "info", "success", "warning", "error", "levelup", "aura" },
 	DefaultKind = "info",
 }
 
@@ -568,6 +734,8 @@ local World = {
 	InfirmaryOrigin = Vector3.new(-75, 0, 120), -- Bệnh xá (nơi hồi sinh khi thua trận)
 	InfirmarySize = Vector3.new(14, 6, 14),
 	InfirmaryDropHeight = 4, -- độ cao nhân vật xuất hiện phía trên Bệnh xá
+	AuraOrigin = Vector3.new(65, 0, 55), -- Trụ sở AURA
+	AuraSize = Vector3.new(18, 12, 14),
 	DefaultSize = Vector3.new(12, 8, 12),
 	DefaultColor = Color3.fromRGB(150, 150, 150),
 	LabelMaxDistance = 90,
@@ -620,6 +788,7 @@ local Text = {
 	AlreadyOwned = "Bạn đã sở hữu món này rồi.",
 	NotEnoughMoney = "Bạn không đủ tiền.",
 	TooFarFromShop = "Bạn đang đứng quá xa cửa hàng.",
+	TooFarFromAura = "Bạn đang đứng quá xa Trụ sở AURA.",
 	InvalidRequest = "Yêu cầu không hợp lệ.",
 	TooFast = "Bạn thao tác quá nhanh, hãy chậm lại một chút.",
 	NoData = "Dữ liệu của bạn chưa sẵn sàng, vui lòng đợi giây lát.",
@@ -666,10 +835,95 @@ local Text = {
 	ShopYourMoney = "Tiền của bạn: %s",
 	ShopAutoClosed = "Bạn đã đi xa nên cửa hàng tự đóng.",
 	ShopNetworkError = "Không kết nối được máy chủ, hãy thử lại.",
+
+	-- ── AURA (v0.3) ──
+	AuraLabel = "Trụ sở AURA",
+	AuraPrompt = "Vào trụ sở",
+
+	AssetLeased = "Đã thuê %s (-%s). Nổi tiếng +%d, phí duy trì %s mỗi chu kỳ.",
+	AssetAlreadyLeased = "Bạn đang thuê tài sản này rồi.",
+	AssetRareOnly = "Tài sản hiếm chỉ có thể có được qua đấu giá.",
+	AssetNotLeased = "Bạn không thuê tài sản này.",
+	AssetReturned = "Đã trả lại %s cho AURA.",
+	AssetReturnedRefund = "Đã trả lại %s cho AURA, hoàn %s.",
+	MaintenancePaid = "AURA thu phí duy trì: -%s.",
+	MaintenanceLate = "Thiếu phí duy trì %s cho %s. Còn %d chu kỳ ân hạn trước khi bị thu hồi.",
+	AssetRevoked = "AURA đã thu hồi %s vì nợ phí duy trì quá %d chu kỳ.",
+	TaxCollected = "AURA thu thuế: -%s (tài sản ròng %s).",
+	TaxHolidayApplied = "Ngày không thuế: AURA miễn thuế kỳ này.",
+	EventStarted = "AURA · %s: %s",
+	EventEnded = 'AURA: sự kiện "%s" đã kết thúc.',
+
+	AuctionOpened = "AURA mở đấu giá %s. Giá khởi điểm %s, kéo dài %d giây.",
+	AuctionNoStock = "AURA: không còn tài sản hiếm nào để đấu giá.",
+	AuctionNone = "Không có phiên đấu giá nào đang diễn ra.",
+	AuctionEnded = "Phiên đấu giá đã kết thúc.",
+	AuctionBidOk = "Đã đặt giá %s cho %s (phí %s).",
+	AuctionOutbid = "Bạn bị vượt giá ở phiên đấu giá %s, đã hoàn %s.",
+	AuctionBidTooLow = "Giá tối thiểu hiện tại là %s.",
+	AuctionLeading = "Bạn đang dẫn đầu phiên đấu giá này.",
+	AuctionOwned = "Bạn đã thuê tài sản này rồi nên không thể đấu giá.",
+	AuctionWon = "Bạn thắng đấu giá %s với %s! Nổi tiếng +%d.",
+	AuctionWonAnnounce = "AURA: %s thắng đấu giá %s với %s.",
+	AuctionNoWinner = "Phiên đấu giá %s kết thúc, không có ai đặt giá.",
+	AuctionSoldOut = "Tài sản %s đã hết kho trong lúc đấu giá. Đã hoàn %s (phí đặt giá không hoàn).",
+	AuctionCancelled = "Phiên đấu giá %s bị hủy vì người dẫn đầu rời máy chủ.",
+	EscrowRefunded = "AURA hoàn %s tiền đặt giá chưa dùng.",
+
+	InflationRaise = "AURA tăng phí duy trì và thuế thêm %d%% (tiền trung bình %s, mục tiêu %s).",
+	InflationLower = "AURA giảm phí duy trì và thuế %d%% (tiền trung bình %s, mục tiêu %s).",
+
+	HudAuraEvent = "AURA: %s · %s",
+	HudAuraNone = "AURA: không có sự kiện",
+
+	AuraTitle = "Trụ sở AURA",
+	AuraClose = "Đóng",
+	AuraTabAssets = "Tài sản",
+	AuraTabAuction = "Đấu giá",
+	AuraTabReport = "Báo cáo",
+	AuraLoading = "Đang tải...",
+	AuraError = "Không tải được dữ liệu AURA, hãy thử lại.",
+	AuraAutoClosed = "Bạn đã đi xa nên Trụ sở AURA tự đóng.",
+
+	AssetUpkeep = "Phí duy trì hiện tại: %s mỗi chu kỳ (1 chu kỳ = 1 ngày game)",
+	AssetInfo = "%s · Giá thuê %s · Phí %s/chu kỳ · Nổi tiếng +%d",
+	AssetLeaseButton = "Thuê %s",
+	AssetReturnButton = "Trả lại",
+	AssetRareButton = "Chỉ qua đấu giá",
+	AssetDebt = "Nợ %d chu kỳ",
+	AssetStock = "Kho còn %d/%d",
+	AssetStockUnknown = "Kho: chưa rõ",
+	AssetLeasedTag = "Đang thuê",
+	AssetKindHouse = "Nhà",
+	AssetKindVehicle = "Xe",
+
+	AuctionCurrent = "Đang đấu giá: %s",
+	AuctionBidLine = "Giá cao nhất: %s (%s)",
+	AuctionNoBids = "Chưa có ai đặt giá. Giá khởi điểm: %s",
+	AuctionTimeLeft = "Còn %s",
+	AuctionBidButton = "Đặt giá %s",
+	AuctionBidInfo = "Phí đặt giá %s (không hoàn) · cần tổng %s",
+	AuctionNextAfter = "Phiên kế tiếp sau khoảng %s",
+	AuctionFeeNote = "Phí đặt giá %d%% không hoàn lại; tiền thắng đấu giá bị AURA thu hồi.",
+
+	ReportCycle = "Chu kỳ #%d · còn %s",
+	ReportEvent = "Sự kiện: %s (còn %s)",
+	ReportNoEvent = "Sự kiện: không có",
+	ReportPolicy = "Hệ số chính sách (phí + thuế): ×%s",
+	ReportTax = "Thuế kỳ tới: sau %s · dự kiến cho bạn: %s",
+	ReportTaxExempt = "Thuế kỳ tới: được miễn (Ngày không thuế)",
+	ReportAvg = "Tiền trung bình: %s (mục tiêu %s) · %d người chơi",
+	ReportFlow = "Chu kỳ trước: tiền vào %s · tiền ra %s",
+	ReportBrackets = "Biểu thuế theo tài sản ròng (mỗi %d chu kỳ):",
+	ReportBracketUpto = "  Đến %s: %s%%",
+	ReportBracketAbove = "  Trên %s: %s%%",
+	ReportLog = "Nhật ký điều chỉnh của AURA:",
+	ReportLogEmpty = "  (chưa có điều chỉnh nào)",
+	ReportLocalRegistry = "Kho tài sản hiếm chỉ tính trong máy chủ này (chưa kết nối registry DataStore).",
 }
 
 local Config = {
-	Version = "0.2.0",
+	Version = "0.3.0",
 	GameName = "Equal Social",
 	AIName = "AURA",
 
@@ -683,6 +937,7 @@ local Config = {
 		MonsterSpawn = "ES_MonsterSpawn", -- điểm xuất hiện của quái (attribute MonsterId)
 		Infirmary = "ES_Infirmary", -- nơi hồi sinh khi thua trận
 		Leaderboard = "ES_Leaderboard", -- bảng xếp hạng 3D (LeaderboardService tự vẽ SurfaceGui)
+		Aura = "ES_Aura", -- Trụ sở AURA (mở cửa sổ tài sản / đấu giá / báo cáo)
 	},
 	Attributes = {
 		Job = "JobId",
@@ -705,6 +960,11 @@ local Config = {
 	Combat = Combat,
 	Monsters = Monsters,
 	Leaderboard = Leaderboard,
+	Assets = Assets,
+	AuraEvents = AuraEvents,
+	Aura = Aura,
+	Auction = Auction,
+	AssetRegistry = AssetRegistry,
 	Stations = Stations,
 	Shops = Shops,
 	ShopRules = ShopRules,

@@ -29,4 +29,10 @@ function Format.money(n: number): string
 	return "$" .. Format.number(n)
 end
 
+-- 125 giây -> "2:05" (số giây âm được coi là 0)
+function Format.duration(seconds: number): string
+	local total = math.max(0, math.floor(seconds + 0.5))
+	return string.format("%d:%02d", total // 60, total % 60)
+end
+
 return Format

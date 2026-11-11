@@ -18,9 +18,11 @@ end
 
 local Calendar = require(ReplicatedStorage.Shared.Calendar)
 local Config = require(ReplicatedStorage.Shared.Config)
+local Format = require(ReplicatedStorage.Shared.Format)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local Types = require(ReplicatedStorage.Shared.Types)
 
+local AuraWindow = require(script.UI.AuraWindow)
 local HUD = require(script.UI.HUD)
 local LeaderboardWindow = require(script.UI.LeaderboardWindow)
 local ShopWindow = require(script.UI.ShopWindow)
@@ -78,6 +80,68 @@ local leaderboardWindow = LeaderboardWindow.new(screenGui, fetchLeaderboard, fun
 	toast:Show(Config.Text.LeaderboardAutoClosed, "info")
 end)
 
+-- ── AURA (v0.3) ──
+local assetLease = Remotes.Function("AssetLease")
+local assetReturn = Remotes.Function("AssetReturn")
+local auctionBid = Remotes.Function("AuctionBid")
+local getAuraState = Remotes.Function("GetAuraState")
+local auraState: Types.AuraState? = nil
+
+-- Gửi một yêu cầu (thuê / trả / đặt giá) rồi hiện kết quả bằng toast. Yield tới khi server trả lời.
+local function requestAction(remote: RemoteFunction, argument: any)
+	local ok, success, message = pcall(function()
+		return remote:InvokeServer(argument)
+	end)
+	if not ok then
+		toast:Show(Config.Text.ShopNetworkError, "error")
+		return
+	end
+	local text = if type(message) == "string" then message else Config.Text.ServerError
+	toast:Show(text, if success == true then "success" else "warning")
+end
+
+local function fetchAura(): Types.AuraView?
+	local ok, view = pcall(function()
+		return getAuraState:InvokeServer()
+	end)
+	if ok and type(view) == "table" and type(view.State) == "table" then
+		return view :: Types.AuraView
+	end
+	return nil
+end
+
+local auraWindow: AuraWindow.AuraWindow
+auraWindow = AuraWindow.new(screenGui, {
+	Fetch = fetchAura,
+	OnLease = function(assetId: string)
+		requestAction(assetLease, assetId)
+		auraWindow:Refetch()
+	end,
+	OnReturn = function(assetId: string)
+		requestAction(assetReturn, assetId)
+		auraWindow:Refetch()
+	end,
+	OnBid = function(amount: number)
+		requestAction(auctionBid, amount)
+		auraWindow:Refetch()
+	end,
+	OnAutoClose = function()
+		toast:Show(Config.Text.AuraAutoClosed, "info")
+	end,
+})
+
+-- Dòng AURA trên HUD: sự kiện đang chạy và thời gian còn lại
+local function updateAuraHud()
+	local current = auraState
+	local event = if current then current.Event else nil
+	if event then
+		local remaining = Format.duration(event.EndsAt - Workspace:GetServerTimeNow())
+		hud:SetAura(string.format(Config.Text.HudAuraEvent, event.Name, remaining))
+	else
+		hud:SetAura(Config.Text.HudAuraNone)
+	end
+end
+
 -- Chỉ áp dụng snapshot mới hơn bản hiện có (GetState và StateUpdate có thể đến lệch thứ tự)
 local function applySnapshot(snapshot: any)
 	if type(snapshot) ~= "table" or type(snapshot.Seq) ~= "number" then
@@ -91,6 +155,7 @@ local function applySnapshot(snapshot: any)
 	state = typed
 	hud:Render(typed)
 	shopWindow:Refresh(typed)
+	auraWindow:SetSnapshot(typed)
 end
 
 Remotes.Event("StateUpdate").OnClientEvent:Connect(applySnapshot)
@@ -104,13 +169,32 @@ end)
 Remotes.Event("OpenShop").OnClientEvent:Connect(function(shopId: any)
 	if type(shopId) == "string" and Config.Shops[shopId] then
 		leaderboardWindow:Close() -- chỉ một cửa sổ mở cùng lúc
+		auraWindow:Close()
 		shopWindow:Open(shopId, state)
 	end
 end)
 
 Remotes.Event("OpenLeaderboard").OnClientEvent:Connect(function()
 	shopWindow:Close()
+	auraWindow:Close()
 	leaderboardWindow:Open()
+end)
+
+Remotes.Event("OpenAura").OnClientEvent:Connect(function()
+	shopWindow:Close()
+	leaderboardWindow:Close()
+	auraWindow:Open()
+end)
+
+Remotes.Event("AuraUpdate").OnClientEvent:Connect(function(newState: any)
+	if type(newState) ~= "table" or type(newState.Cycle) ~= "number" then
+		return
+	end
+	local typed = newState :: Types.AuraState
+	auraState = typed
+	shopWindow:SetPriceMultipliers(typed.PriceMultipliers or {})
+	auraWindow:SetState(typed)
+	updateAuraHud()
 end)
 
 -- Dòng "Hôm nay: ..." trên HUD: ngày game suy ra từ giờ server, chỉ cập nhật khi đổi ngày
@@ -122,6 +206,7 @@ task.spawn(function()
 			shownDay = day
 			hud:SetDay(string.format(Config.Text.HudDay, Calendar.DayName(day)))
 		end
+		updateAuraHud()
 		task.wait(1)
 	end
 end)
