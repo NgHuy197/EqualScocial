@@ -33,6 +33,8 @@ type Fields = {
 	NetWorth: TextLabel,
 	Day: TextLabel,
 	Aura: TextLabel,
+	Season: TextLabel,
+	Pvp: TextLabel,
 	Stats: { [string]: StatRow },
 	Skills: { [string]: SkillRow },
 }
@@ -113,6 +115,23 @@ function HUD.new(parent: Instance): HUD
 	aura.Size = UDim2.new(1, 0, 0, 20)
 	aura.LayoutOrder = nextOrder()
 
+	-- Mùa (v0.4): tên mùa, đếm ngược, điểm PvP và danh hiệu mới nhất (có thể xuống dòng)
+	local season = Theme.label(root, "", 16, Theme.Colors.Fame, Theme.Fonts.Regular)
+	season.Name = "Season"
+	season.Size = UDim2.new(1, 0, 0, 20)
+	season.AutomaticSize = Enum.AutomaticSize.Y
+	season.TextWrapped = true
+	season.LayoutOrder = nextOrder()
+
+	-- Trạng thái đấu trường: chỉ hiện khi đang chờ / đang đấu
+	local pvp = Theme.label(root, "", 16, Theme.Colors.Accent, Theme.Fonts.Semibold)
+	pvp.Name = "Pvp"
+	pvp.Size = UDim2.new(1, 0, 0, 20)
+	pvp.AutomaticSize = Enum.AutomaticSize.Y
+	pvp.TextWrapped = true
+	pvp.Visible = false
+	pvp.LayoutOrder = nextOrder()
+
 	newHeader(root, Config.Text.HudStats, nextOrder())
 
 	local statRows: { [string]: StatRow } = {}
@@ -179,6 +198,8 @@ function HUD.new(parent: Instance): HUD
 		NetWorth = netWorth,
 		Day = day,
 		Aura = aura,
+		Season = season,
+		Pvp = pvp,
 		Stats = statRows,
 		Skills = skillRows,
 	}, HUD)
@@ -192,6 +213,17 @@ end
 -- Dòng sự kiện đang chạy của AURA ("AURA: Khủng hoảng lương thực · 7:42")
 function HUD.SetAura(self: HUD, text: string)
 	self.Aura.Text = text
+end
+
+-- Dòng mùa ("Mùa 1 · còn 55 ngày · PvP 1000 điểm")
+function HUD.SetSeason(self: HUD, text: string)
+	self.Season.Text = text
+end
+
+-- Dòng đấu trường; nil = ẩn (không ở hàng chờ, không đang đấu)
+function HUD.SetPvp(self: HUD, text: string?)
+	self.Pvp.Visible = text ~= nil
+	self.Pvp.Text = text or ""
 end
 
 function HUD.Render(self: HUD, state: Types.Snapshot)

@@ -161,6 +161,53 @@ local function buildAuraHq(world: Folder)
 	CollectionService:AddTag(block, Config.Tags.Aura)
 end
 
+-- Đấu trường: sàn đấu, hai bục xuất phát (tag ArenaPad + PadIndex) và quầy hàng chờ (tag Arena)
+local function buildArena(world: Folder)
+	local folder = Instance.new("Folder")
+	folder.Name = "Arena"
+	folder.Parent = world
+
+	local origin = Config.World.ArenaOrigin
+	local floorSize = Config.World.ArenaFloorSize
+	local floor = newBlock(
+		"ArenaFloor",
+		Vector3.new(floorSize, 0.4, floorSize),
+		origin + Vector3.new(0, 0.2, 0),
+		Color3.fromRGB(205, 180, 140)
+	)
+	floor.Material = Enum.Material.Sand
+	floor.CanCollide = false
+	floor.Parent = folder
+
+	for index = 1, 2 do
+		local side = if index == 1 then -1 else 1
+		local pad = newBlock(
+			`ArenaPad{index}`,
+			Vector3.new(6, 1, 6),
+			origin + Vector3.new(side * Config.World.ArenaPadOffset, 0.5, 0),
+			if index == 1 then Color3.fromRGB(220, 90, 90) else Color3.fromRGB(80, 130, 220)
+		)
+		pad:SetAttribute(Config.Attributes.ArenaPad, index)
+		pad.Parent = folder
+		CollectionService:AddTag(pad, Config.Tags.ArenaPad)
+	end
+
+	local kioskSize = Vector3.new(10, 7, 6)
+	local kiosk = newBlock(
+		"ArenaKiosk",
+		kioskSize,
+		origin + Config.World.ArenaKioskOffset + Vector3.new(0, kioskSize.Y / 2, 0),
+		Color3.fromRGB(120, 70, 50)
+	)
+	addLabel(
+		kiosk,
+		Config.Text.ArenaLabel,
+		string.format(Config.Text.WorldHintTap, Config.Text.ArenaPrompt)
+	)
+	kiosk.Parent = folder
+	CollectionService:AddTag(kiosk, Config.Tags.Arena)
+end
+
 -- Bảng xếp hạng 3D ở quảng trường. LeaderboardService tự vẽ nội dung lên mặt trước (-Z) của part này.
 local function buildLeaderboard(world: Folder)
 	local size = Config.World.LeaderboardSize
@@ -415,6 +462,7 @@ function WorldBuilder.Build()
 
 	buildLeaderboard(world)
 	buildAuraHq(world)
+	buildArena(world)
 	buildInfirmary(world)
 	local spawnCount = buildMonsterZone(world)
 

@@ -1,8 +1,8 @@
 # Equal Social — Game Design Document
 
-Phiên bản tài liệu: 0.3 (khớp bản v0.3: MVP + trường học, đánh quái, bảng xếp hạng + AURA) · Tên game tạm: **Equal Social** · AI cai quản: **AURA**
+Phiên bản tài liệu: 0.4 (khớp bản v0.4: MVP + trường học, đánh quái, bảng xếp hạng + AURA + PvP và Season) · Tên game tạm: **Equal Social** · AI cai quản: **AURA**
 
-> Mọi con số trong tài liệu này là giá trị trong `src/shared/Config.luau`. Khi đổi số liệu, sửa Config **và** cập nhật bảng ở đây. Mục 4 (v0.1), 6 (v0.2) và 7 (v0.3) **đã được cài đặt**; mục 8 (v0.4) là **bản nháp thiết kế**, chưa được cài đặt.
+> Mọi con số trong tài liệu này là giá trị trong `src/shared/Config.luau`. Khi đổi số liệu, sửa Config **và** cập nhật bảng ở đây. Mục 4 (v0.1), 6 (v0.2), 7 (v0.3) và 8.0–8.2 (v0.4) **đã được cài đặt**; 8.3 (monetization) là bản nháp.
 
 ## 1. Tầm nhìn
 
@@ -182,7 +182,9 @@ Có thêm trong v0.2 (xem mục 6): lịch trong game, 2 kỹ năng mới (Trí 
 
 Có thêm trong v0.3 (xem mục 7): Trụ sở AURA, tài sản thuê (nhà, xe), phí duy trì và thu hồi, thuế lũy tiến, sự kiện ngẫu nhiên, đấu giá tài sản hiếm, bộ điều chỉnh lạm phát và Báo cáo AURA.
 
-Chưa có: PvP, Season, cosmetic bán bằng Robux, tương tác trực tiếp giữa người chơi (trao đổi, chat bubble tùy biến...).
+Có thêm trong v0.4 (xem mục 8): Đấu trường 1v1 có luật và điểm Elo, Season (về vạch xuất phát, lịch sử, danh hiệu).
+
+Chưa có: cosmetic bán bằng Robux, tương tác trực tiếp giữa người chơi (trao đổi, chat bubble tùy biến...).
 
 ## 6. v0.2 — Học tập, đánh quái, bảng xếp hạng (đã triển khai)
 
@@ -393,23 +395,58 @@ Bốc thăm theo trọng số, mỗi lúc một sự kiện, công khai (toast t
 - Registry DataStore và lưu/tải thật chưa được kiểm chứng (cần publish place); logic đã kiểm thử bằng DataStore giả và registry cục bộ trong Studio.
 - Số chu kỳ hiển thị là số tuyệt đối tính từ giờ server (rất lớn).
 
-## 8. v0.4 — PvP có luật và Season (bản nháp)
+## 8. v0.4 — PvP có luật và Season (đã triển khai)
 
-### 8.1 PvP có luật
+Số liệu ở `Config.Pvp`, `Config.Season`. Code: `PvpService`, `SeasonService`, `Util/Season`; client: dòng Mùa và dòng Đấu trường trên HUD, phím F / nút "Đánh".
 
-- **Đấu trường** có hàng chờ, các thể thức 1v1 và đội nhỏ, luật rõ ràng (thời gian, vật phẩm cho phép, vùng thi đấu), trọng tài là AURA. Phong cách hoạt hình, không máu me.
-- **Xếp hạng**: điểm kỹ năng đấu (kiểu Elo) theo mùa. Chỉ số Sức mạnh/Năng lượng ảnh hưởng nhẹ để skill có ý nghĩa nhưng **không** quyết định tất cả (đề xuất: cân bằng để kỹ năng điều khiển quan trọng hơn chênh lệch chỉ số).
-- **Vé vào cửa và quỹ giải thưởng**: người chơi đóng một khoản tiền trong game; AURA giữ lại một phần (hút tiền), phần còn lại chia cho người thắng.
-- **Cá cược**: khán giả có thể đặt tiền *trong game* vào kết quả trận. Ràng buộc: chỉ dùng tiền trong game (không bao giờ liên quan đến Robux, không quy đổi ra tiền thật), theo kiểu quỹ chung tỉ lệ (không phải máy quay ngẫu nhiên), giới hạn mức đặt, và **bắt buộc rà soát chính sách Roblox về nội dung giống cờ bạc và điều chỉnh độ tuổi/giới hạn trước khi làm**. Nếu rủi ro chính sách cao, bỏ tính năng này.
+### 8.0 Rà soát chính sách: bỏ cá cược
+
+[Roblox Community Standards](https://about.roblox.com/community-standards) **cấm cả cờ bạc mô phỏng lẫn cờ bạc thật**, và không cho trao đổi tiền thật, Robux hay vật phẩm có giá trị trong game liên quan tới cờ bạc. Theo thông báo năm 2023 (được trích trên diễn đàn dev), "đặt cược mô phỏng" không còn được phép, kể cả ở trải nghiệm 17+. Vì vậy:
+
+- **Bỏ cá cược của khán giả** (bản nháp 8.1 cũ).
+- **Bỏ vé vào cửa có quỹ thưởng chia cho người thắng**: đây cũng là đặt tiền vào kết quả trận.
+- PvP chỉ thưởng **điểm xếp hạng, XP và danh hiệu**, không có tiền.
+
+### 8.1 Đấu trường 1v1
+
+- **Vị trí** (map placeholder): sàn đấu tâm (0, −125), hai bục cách tâm 14 studs theo trục X, quầy hàng chờ ở (0, −89). Map thật: gắn tag `ES_Arena` cho quầy và `ES_ArenaPad` + `PadIndex` = 1/2 cho hai bục; tâm đấu trường = trung điểm hai bục.
+- **Hàng chờ:** nhấn E ở quầy để vào, nhấn lần nữa để rời. Cần ≥ 20 Năng lượng. Ghép cặp theo thứ tự vào hàng chờ (mỗi giây).
+- **Trận:** dịch chuyển lên hai bục, đếm ngược 3 giây, đánh 60 giây. **Máu PvP riêng** (100), không đụng tới máu nhân vật: thua không chết, không mất tiền.
+- **Tấn công:** phím F hoặc nút "Đánh" (điện thoại / tay cầm). Server tự biết mục tiêu là đối thủ, kiểm tra nhịp 1 đòn/giây, tầm 10 studs (+2 dung sai) và rate-limit 12 lần/5 giây.
+- **Sát thương** = round(10 × (1 + 0,03 × level Sức mạnh)): Lv0 = 10, Lv20 = 16. Chỉ số ảnh hưởng nhẹ; giữ khoảng cách và đánh đúng nhịp quan trọng hơn.
+
+| Kết thúc | Kết quả |
+| --- | --- |
+| Hết máu | người còn máu thắng |
+| Hết 60 giây | nhiều máu hơn thắng; bằng nhau thì hòa |
+| Ra khỏi vùng đấu (cách tâm > 34 studs) | người ra thua |
+| Thoát game, nhân vật chết, mất nhân vật | người đó thua (thoát game vẫn bị tính thua và được lưu) |
+
+- **Điểm Elo theo mùa:** bắt đầu 1000, K = 32 (ngang điểm: thắng +16, thua −16, hòa 0).
+- **Sau trận** (cả hai): Năng lượng −10, Độ no −5, Căng thẳng +8; XP Sức mạnh: thắng 20, hòa 12, thua 8. Hai người được đưa về cạnh quầy sau 2 giây.
+- **Chưa làm:** thể thức đội nhỏ, ghép cặp theo điểm, khán đài / xem trận.
 
 ### 8.2 Season
 
-- Mỗi **mùa kéo dài 4–8 tuần**. Hết mùa, mọi người **quay về vạch xuất phát**:
-  - **Reset**: tiền (về $100), chỉ số, kỹ năng, mọi tài sản thuê từ AURA, đồ mua bằng tiền game.
-  - **Giữ lại**: cosmetic (kể cả mua bằng Robux), **danh hiệu** theo thành tích mùa, huy hiệu, và **bảng xếp hạng lịch sử** (hạng cuối mùa, tài sản ròng đỉnh, hạng PvP).
-- Khuyến khích quay lại: phần thưởng cuối mùa (danh hiệu, cosmetic giới hạn), thông báo đếm ngược, "đêm chung kết" với công bố kết quả.
-- Dữ liệu tách hai tầng: `Persistent` (cosmetic, danh hiệu, lịch sử) và `Season` (tiền, chỉ số, kỹ năng, tài sản). Khi vào game, nếu `Season.Id` khác mùa hiện tại thì lưu hồ sơ mùa cũ vào lịch sử, rồi dựng lại `Season` từ template. Dùng `SchemaVersion` + migration để làm việc này an toàn.
-- Người chơi vào giữa mùa vẫn xuất phát bằng template chuẩn; nên có cơ chế "bắt kịp" nhẹ để họ không bị bỏ xa (xem câu hỏi mở).
+- `Config.Season`: `Id = 1`, tên "Mùa 1", `EndsAt` = 06/01/2027 00:00 (giờ Việt Nam), 8 tuần. `EndsAt` **chỉ để đếm ngược** trên HUD; mùa chỉ đổi khi tăng `Id` (rồi publish).
+- **Sang mùa:** khi người chơi vào game với `SeasonId` khác mùa hiện tại, `DataService` (qua `Util/Season.Rollover`) làm **trước khi báo cho service khác**:
+  1. Lưu hồ sơ mùa cũ vào `History`: tiền, tài sản ròng cao nhất, điểm và số trận PvP, danh hiệu. Giữ tối đa 20 mùa.
+  2. Trao danh hiệu theo `TitleRules` (dạng "Đấu sĩ · Mùa 1").
+  3. **Quay về vạch xuất phát:** mọi trường trừ `SchemaVersion`, `SeasonId`, `History`, `Titles` lấy lại từ template (tiền $100, chỉ số, kỹ năng, đồ cửa hàng, tài sản thuê, cooldown trạm, PvP, tiền khóa đấu giá).
+- Tiền khóa đấu giá mùa cũ **bị bỏ**, không hoàn sang mùa mới.
+- Bảng xếp hạng (`EqualSocial_NetWorth_S<Id>`) và registry tài sản hiếm (`EqualSocial_AssetRegistry_S<Id>`) có hậu tố theo `Id`, nên mùa mới tự dùng store mới.
+- Dữ liệu trước v0.4 (không có `SeasonId`) được reconcile thành mùa hiện tại, **không bị reset**.
+- Tài sản ròng cao nhất (`PeakNetWorth`) được cập nhật mỗi lần tính tài sản ròng (mỗi snapshot).
+
+| Danh hiệu | Điều kiện cuối mùa |
+| --- | --- |
+| Nhà vô địch đấu trường | điểm PvP ≥ 1300 và ≥ 10 trận |
+| Đấu sĩ | điểm PvP ≥ 1150 và ≥ 5 trận |
+| Đại gia | tài sản ròng cao nhất ≥ $50.000 |
+| Người có của | tài sản ròng cao nhất ≥ $10.000 |
+
+- HUD: "Mùa 1 · còn 55 ngày · PvP 1000 điểm" và danh hiệu mới nhất. Sang mùa có toast chào mùa mới và toast cho từng danh hiệu.
+- **Chưa làm:** cơ chế "bắt kịp" cho người vào giữa mùa, đêm chung kết, phần thưởng cosmetic cuối mùa, xem lịch sử các mùa trong UI.
 
 ### 8.3 Monetization (cosmetic-only)
 
@@ -437,7 +474,7 @@ Bốc thăm theo trọng số, mỗi lúc một sự kiện, công khai (toast t
 8. **Nổi tiếng và đồ thuê.** Với v0.3, nhà/xe thuê có cộng Nổi tiếng không? Nếu đồ thuê bị thu hồi thì Nổi tiếng giảm lại, có gây cảm giác bị phạt quá nặng không?
 9. **Cơ chế thu hồi.** Ân hạn bao lâu là hợp lý? Có cho "cứu" bằng khoản vay từ AURA (có lãi) hay không?
 10. **Thuế tính trên gì.** Tài sản ròng (khuyến khích chi tiêu) hay thu nhập (khuyến khích tích lũy)? Người chơi cố ý "giấu" tài sản bằng cách mua đồ sở hữu vĩnh viễn thì xử lý ra sao?
-11. **Cá cược PvP.** Có đáng làm không so với rủi ro chính sách? Có phương án thay thế (cược bằng điểm danh vọng không có giá trị kinh tế)?
+11. **Cá cược PvP.** *(Đã chốt: bỏ, Roblox cấm cờ bạc mô phỏng, xem 8.0.)* Còn mở: khán giả có thể "cổ vũ" hay dự đoán kết quả không có giá trị kinh tế không, hay cũng nên tránh?
 12. **Độ dài mùa.** 4 tuần hay 8 tuần? Có nên linh hoạt theo hoạt động của người chơi? Cách thông báo và kết thúc mùa để không gây hụt hẫng.
 13. **Chống đa tài khoản / farm.** Cần cơ chế gì để một người dùng nhiều tài khoản chuyển tiền cho tài khoản chính? (MVP chưa có chuyển tiền; khi thêm thương mại/đấu giá phải giải quyết.)
 14. **Đánh quái và PvP: chỉ số hay kỹ năng điều khiển?** Mức ảnh hưởng của chỉ số nên là bao nhiêu để người chơi mới vẫn có cơ hội thắng?

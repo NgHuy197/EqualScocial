@@ -22,6 +22,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Types = require(ReplicatedStorage.Shared.Types)
+local SeasonUtil = require(script.Parent.Parent.Util.Season)
 local Validate = require(script.Parent.Parent.Util.Validate)
 
 type PlayerData = Types.PlayerData
@@ -50,6 +51,8 @@ local ProfileStore = (require(script.Parent.Parent.Vendor.ProfileStore) :: any) 
 local profiles: { [Player]: Profile } = {}
 local loading: { [Player]: boolean } = {}
 local listeners: { LoadedCallback } = {}
+local releasingListeners: { LoadedCallback } = {}
+local rollovers: { [Player]: Types.SeasonRecord } = {} -- hồ sơ mùa vừa lưu, chờ SeasonService báo
 local warnedOffline = false
 local store: Store? = nil
 
@@ -97,6 +100,11 @@ local function buildTemplate(): PlayerData
 		Combat = { WindowStart = 0, Earned = 0 },
 		Assets = {},
 		Aura = { LastCycle = 0 },
+		SeasonId = Config.Season.Id,
+		Pvp = { Rating = Config.Pvp.StartRating, Wins = 0, Losses = 0, Draws = 0 },
+		PeakNetWorth = 0,
+		History = {},
+		Titles = {},
 	}
 end
 
@@ -158,6 +166,32 @@ local function sanitize(data: PlayerData)
 			record.Missed = math.max(0, math.floor(record.Missed))
 		end
 	end
+
+	-- PvP (v0.4): số hỏng thì về mặc định
+	local pvp = data.Pvp
+	if not Validate.isFiniteNumber(pvp.Rating) then
+		pvp.Rating = Config.Pvp.StartRating
+	end
+	for _, field in { "Wins", "Losses", "Draws" } do
+		local value = (pvp :: any)[field];
+		(pvp :: any)[field] = if Validate.isFiniteNumber(value)
+			then math.max(0, math.floor(value))
+			else 0
+	end
+	if not Validate.isFiniteNumber(data.PeakNetWorth) or data.PeakNetWorth < 0 then
+		data.PeakNetWorth = 0
+	end
+	if not Validate.isFiniteNumber(data.SeasonId) then
+		data.SeasonId = Config.Season.Id
+	end
+	-- Danh hiệu: chỉ giữ chuỗi
+	local titles: { string } = {}
+	for _, title in data.Titles do
+		if type(title) == "string" then
+			table.insert(titles, title)
+		end
+	end
+	data.Titles = titles
 
 	local aura = data.Aura
 	if not Validate.isFiniteNumber(aura.LastCycle) then
@@ -229,6 +263,20 @@ function DataService:OnLoaded(callback: LoadedCallback)
 	end
 end
 
+-- Đăng ký callback chạy ĐỒNG BỘ ngay trước khi dữ liệu của người chơi rời game bị gỡ và lưu lần
+-- cuối. Dùng để chốt việc còn dở (ví dụ xử thua trận PvP khi thoát giữa trận) trên dữ liệu sẽ được lưu.
+-- Callback KHÔNG được yield.
+function DataService:OnReleasing(callback: LoadedCallback)
+	table.insert(releasingListeners, callback)
+end
+
+-- Lấy (và xoá) hồ sơ mùa vừa được lưu khi người chơi này vào game, nếu có
+function DataService:TakeRollover(player: Player): Types.SeasonRecord?
+	local record = rollovers[player]
+	rollovers[player] = nil
+	return record
+end
+
 -- Chờ (yield) tới khi dữ liệu sẵn sàng hoặc hết thời gian / người chơi thoát
 function DataService:WaitForData(player: Player, timeout: number?): PlayerData?
 	local deadline = os.clock() + (timeout or 30)
@@ -283,6 +331,12 @@ function DataService:_load(player: Player)
 	profile:AddUserId(player.UserId) -- gắn UserId với key (yêu cầu GDPR của Roblox)
 	reconcile(profile.Data :: any, buildTemplate() :: any)
 	sanitize(profile.Data)
+	-- Sang mùa (nếu dữ liệu thuộc mùa cũ) TRƯỚC khi báo OnLoaded, để không service nào thấy dữ liệu
+	-- mùa cũ (ví dụ hoàn tiền khóa đấu giá mùa cũ sang mùa mới).
+	local archived = SeasonUtil.Rollover(profile.Data, buildTemplate())
+	if archived then
+		rollovers[player] = archived
+	end
 	profile.Data.SchemaVersion = Config.Data.SchemaVersion
 
 	-- Server khác giành phiên trong lúc người chơi còn ở đây: gỡ dữ liệu để không service nào sửa
@@ -326,7 +380,17 @@ function DataService:_release(player: Player)
 	if not profile then
 		return
 	end
+	for _, callback in releasingListeners do
+		local ok, err = pcall(function(): any
+			callback(player, profile.Data)
+			return nil
+		end)
+		if not ok then
+			warn(`[DataService] Lỗi OnReleasing: {tostring(err)}`)
+		end
+	end
 	profiles[player] = nil
+	rollovers[player] = nil
 	profile:EndSession()
 end
 

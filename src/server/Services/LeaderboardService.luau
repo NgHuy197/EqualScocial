@@ -178,6 +178,11 @@ function LeaderboardService:GetNetWorth(player: Player): number
 		+ services.Shop:GetOwnedValue(player)
 		+ services.Assets:GetValue(player)
 	lastKnown[player.UserId] = value
+	-- Tài sản ròng cao nhất trong mùa (dùng cho hồ sơ và danh hiệu cuối mùa). Được tính lại mỗi lần
+	-- gửi snapshot, nên luôn cập nhật khi tài sản thay đổi.
+	if value > data.PeakNetWorth then
+		data.PeakNetWorth = value
+	end
 	return value
 end
 

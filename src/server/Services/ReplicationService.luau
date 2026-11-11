@@ -137,6 +137,7 @@ function ReplicationService:BuildSnapshot(player: Player): Types.Snapshot?
 		Skills = skills,
 		Owned = owned,
 		Assets = assets,
+		Season = services.Season:BuildSnapshot(data),
 	}
 end
 
