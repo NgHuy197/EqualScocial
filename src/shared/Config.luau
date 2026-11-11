@@ -689,15 +689,11 @@ local Replication = {
 }
 
 local Data = {
-	StoreName = "EqualSocial_PlayerData_v1",
+	-- v2: định dạng ProfileStore (có khóa phiên). Store v1 cũ (bảng thô) KHÔNG được đọc lại.
+	StoreName = "EqualSocial_PlayerData_v2",
 	KeyPrefix = "u_",
 	SchemaVersion = 1,
-	AutosaveSeconds = 120,
-	LoadRetries = 4,
-	LoadRetryDelay = 2,
-	SaveRetries = 3,
-	SaveRetryDelay = 2,
-	ShutdownSaveTimeout = 25, -- BindToClose cho tối đa ~30 giây
+	AutosaveSeconds = 120, -- chu kỳ autosave của ProfileStore (AUTO_SAVE_PERIOD)
 }
 
 -- ───────────────────────────── Thông báo & UI ─────────────────────────────
@@ -796,6 +792,7 @@ local Text = {
 
 	-- Dữ liệu
 	DataLoadFailed = "Không thể tải dữ liệu của bạn. Vui lòng vào lại game sau ít phút.",
+	DataSessionEnded = "Dữ liệu của bạn vừa được mở ở một máy chủ khác. Vui lòng vào lại game.",
 
 	-- HUD (client)
 	HudStats = "CHỈ SỐ",

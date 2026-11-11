@@ -82,7 +82,7 @@ DataStore chỉ chạy trong Studio khi:
 1. **Đã publish place**: File → *Publish to Roblox* (đặt tên, lưu vào một experience của bạn).
 2. Bật **Enable Studio Access to API Services**: *Home → Game Settings → Security → Enable Studio Access to API Services*, bấm Save.
 
-Nếu chưa làm 2 bước này, game **vẫn chạy được** nhưng ở chế độ KHÔNG LƯU và Output có cảnh báo `chạy KHÔNG LƯU`. Dữ liệu dùng key `u_<UserId>` trong DataStore `EqualSocial_PlayerData_v1`. Lưu ý: Studio ghi vào DataStore thật của experience, nên khi test hãy dùng một experience riêng cho dev.
+Nếu chưa làm 2 bước này, game **vẫn chạy được** nhưng ở chế độ KHÔNG LƯU và Output có cảnh báo `chạy KHÔNG LƯU`. Dữ liệu dùng key `u_<UserId>` trong DataStore `EqualSocial_PlayerData_v2`, quản lý bằng [ProfileStore](https://github.com/MadStudioRoblox/ProfileStore) (có khóa phiên: một người chơi chỉ được mở dữ liệu ở một server). Lưu ý: Studio ghi vào DataStore thật của experience, nên khi test hãy dùng một experience riêng cho dev.
 
 ### 6. Chơi thử
 
@@ -118,7 +118,7 @@ Type-check `--!strict` bằng luau-lsp: tải file định nghĩa API Roblox `gl
 
 ```bash
 rojo sourcemap default.project.json -o sourcemap.json
-luau-lsp analyze --platform=roblox --sourcemap=sourcemap.json --definitions=globalTypes.d.luau src
+luau-lsp analyze --platform=roblox --sourcemap=sourcemap.json --definitions=globalTypes.d.luau --ignore="**/Vendor/**" src
 ```
 
 ## Kết nối Roblox Studio MCP server (để Claude Code điều khiển Studio)
@@ -163,5 +163,5 @@ Repo [Roblox/studio-rust-mcp-server](https://github.com/Roblox/studio-rust-mcp-s
 ## Ghi chú
 
 - Registry tài sản hiếm và lưu/tải thật chưa kiểm chứng trên place đã publish.
-- Chưa có session locking cho dữ liệu (TODO chuyển sang ProfileStore).
+- Dữ liệu dùng ProfileStore (thư viện bên thứ ba, Apache 2.0, đặt ở `src/server/Vendor/ProfileStore`, không sửa trực tiếp). Khóa phiên giữa hai server thật chưa được kiểm chứng.
 - Robux chỉ bán cosmetic; không nội dung lãng mạn hay chính trị đời thực (xem [CLAUDE.md](CLAUDE.md) và GDD).

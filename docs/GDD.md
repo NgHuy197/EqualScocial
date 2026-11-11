@@ -142,9 +142,10 @@ Mở bằng ProximityPrompt (nhấn E, không cần giữ). Mua qua RemoteFuncti
 
 ### 4.9 Dữ liệu và đồng bộ
 
-- DataStore `EqualSocial_PlayerData_v1`, khoá `u_<UserId>`. Template + reconcile (người chơi cũ tự được bổ sung trường mới), `SchemaVersion = 1`.
-- Tải: thử lại tối đa 4 lần. **Thất bại trên server thật ⇒ kick** để không ghi đè dữ liệu thật bằng dữ liệu rỗng. Studio không có API access ⇒ chạy **không lưu** và cảnh báo.
-- Lưu: autosave mỗi 120 giây, khi rời game, và trong `BindToClose` (chờ tối đa ~25 giây). Chưa có session locking (TODO ProfileStore).
+- **ProfileStore** (có khóa phiên), store `EqualSocial_PlayerData_v2`, khoá `u_<UserId>`. Template + reconcile (người chơi cũ tự được bổ sung trường mới), `SchemaVersion = 1`. (v0.1–v0.3 dùng DataStore thô `..._v1`; không chuyển dữ liệu vì place chưa từng publish.)
+- **Khóa phiên:** mỗi profile chỉ mở ở một server. Vào server mới khi server cũ chưa nhả khóa ⇒ ProfileStore nhờ server cũ lưu và nhả, chờ tối đa ~40 giây rồi giành quyền. Bị giành phiên khi đang chơi ⇒ gỡ dữ liệu và kick. Nhờ đó tiền khóa đấu giá và tài sản hiếm không thể bị nhân đôi khi đổi server.
+- Tải: **không mở được phiên ⇒ kick** để không ghi đè dữ liệu thật bằng dữ liệu rỗng. Studio không có API access ⇒ ProfileStore dùng kho giả, chạy **không lưu** và cảnh báo.
+- Lưu: autosave mỗi 120 giây (`AUTO_SAVE_PERIOD`), khi rời game (`EndSession`) và khi tắt server (`BindToClose` của ProfileStore).
 - Đồng bộ: server gom thay đổi và gửi snapshot (tiền, chỉ số, skill, đồ sở hữu, Nổi tiếng) tối đa **5 lần/giây** khi có thay đổi; client lấy trạng thái đầu bằng `GetState`. Snapshot có số thứ tự để bỏ qua gói cũ.
 
 ### 4.10 Chống gian lận (đã áp dụng trong MVP)
@@ -426,7 +427,7 @@ Bốc thăm theo trọng số, mỗi lúc một sự kiện, công khai (toast t
 12. **Độ dài mùa.** 4 tuần hay 8 tuần? Có nên linh hoạt theo hoạt động của người chơi? Cách thông báo và kết thúc mùa để không gây hụt hẫng.
 13. **Chống đa tài khoản / farm.** Cần cơ chế gì để một người dùng nhiều tài khoản chuyển tiền cho tài khoản chính? (MVP chưa có chuyển tiền; khi thêm thương mại/đấu giá phải giải quyết.)
 14. **Đánh quái và PvP: chỉ số hay kỹ năng điều khiển?** Mức ảnh hưởng của chỉ số nên là bao nhiêu để người chơi mới vẫn có cơ hội thắng?
-15. **Dữ liệu và scale.** Khi nào chuyển sang ProfileStore (session locking)? OrderedDataStore hay MemoryStore cho bảng xếp hạng theo thời gian thực?
+15. **Dữ liệu và scale.** (Đã chuyển sang ProfileStore.) OrderedDataStore hay MemoryStore cho bảng xếp hạng theo thời gian thực? Registry tài sản hiếm và dữ liệu người chơi vẫn ghi ở hai nơi riêng: server sập giữa hai lần ghi có thể làm lệch kho.
 16. **Cosmetic và Nổi tiếng** (đã đề xuất không cộng): chấp nhận được với người chơi mua cosmetic không? Có cần hệ "Phong cách" riêng để khoe cosmetic?
 17. **Tên game.** "Equal Social" chỉ là tên tạm.
 18. **Trần tiền từ quái ($5.000/giờ).** Nghề không có trần nên trần này chỉ chặn quái thành nguồn thu vô hạn. Con số phù hợp là bao nhiêu? Có nên đặt trần chung cho mọi nguồn thu thay vì riêng quái?

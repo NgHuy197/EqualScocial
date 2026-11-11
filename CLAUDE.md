@@ -25,7 +25,7 @@ rojo sourcemap default.project.json -o sourcemap.json   # cần cho luau-lsp
 Type-check `--!strict` bằng luau-lsp (cần file định nghĩa API Roblox `globalTypes.d.luau`, tải từ trang luau-lsp):
 
 ```bash
-luau-lsp analyze --platform=roblox --sourcemap=sourcemap.json --definitions=globalTypes.d.luau src
+luau-lsp analyze --platform=roblox --sourcemap=sourcemap.json --definitions=globalTypes.d.luau --ignore="**/Vendor/**" src
 ```
 
 Sau mỗi thay đổi code, tối thiểu phải qua: `stylua --check src`, `selene src`, type-check luau-lsp (không lỗi).
@@ -34,7 +34,7 @@ Sau mỗi thay đổi code, tối thiểu phải qua: `stylua --check src`, `sel
 
 ```
 src/shared  → ReplicatedStorage.Shared                       Config, Remotes, Format, Types, Calendar
-src/server  → ServerScriptService.Server (init.server.luau)  Services/, Util/, WorldBuilder
+src/server  → ServerScriptService.Server (init.server.luau)  Services/, Util/, Vendor/, WorldBuilder
 src/client  → StarterPlayer.StarterPlayerScripts.Client      init.client.luau, UI/
 ```
 
@@ -42,6 +42,7 @@ src/client  → StarterPlayer.StarterPlayerScripts.Client      init.client.luau,
 - `Remotes.luau`: danh sách RemoteEvent/RemoteFunction. Server gọi `Remotes.Init()` một lần; nơi khác dùng `Remotes.Event(name)` / `Remotes.Function(name)`.
 - `Calendar.luau`: lịch trong game thuần tính toán từ giờ server (`workspace:GetServerTimeNow()`), dùng chung server (lớp mở/đóng) và client (HUD).
 - `Services/*` (thứ tự khởi động trong `init.server.luau`): `DataService`, `EconomyService`, `StatsService`, `SkillService`, `JobService`, `StationService`, `ShopService`, `SchoolService`, `CombatService`, `AssetService` (thuê/trả tài sản, phí duy trì, thu hồi), `AuctionService` (đấu giá tài sản hiếm, tiền khóa), `AuraService` (chu kỳ, thuế, sự kiện, lạm phát, Báo cáo), `LeaderboardService`, `ReplicationService`.
+- `Vendor/ProfileStore`: thư viện ProfileStore (MAD STUDIO, Apache 2.0) giữ **nguyên bản gốc**, không sửa; nguồn và commit ghi trong `SOURCE.txt`. Được loại khỏi StyLua (`.styluaignore`), Selene (`exclude` trong `selene.toml`) và type-check (`--ignore`). Chỉ `DataService` require nó.
 - `Util/*`: `Validate` (kiểm tra dữ liệu/khoảng cách), `RateLimiter`, `Prompts` (gắn ProximityPrompt theo tag có cooldown + kiểm tra khoảng cách phía server), `Describe` (chuỗi mô tả nghề/điều kiện dùng chung), `MonsterModel` (dựng quái và thanh máu), `BoardGui` (vẽ chữ lên bảng xếp hạng 3D), `AssetRegistry` (kho tài sản hiếm toàn cầu trong DataStore, nhận/trả nguyên tử bằng `UpdateAsync`; Studio không API thì dùng bản cục bộ).
 - Client `UI/*`: `Theme`, `HUD`, `Toast`, `ShopWindow`, `LeaderboardWindow`, `AuraWindow` (3 tab Tài sản / Đấu giá / Báo cáo).
 - `WorldBuilder`: dựng map placeholder nếu Workspace chưa có `World`; map thật chỉ cần gắn **tag + attribute** (xem bên dưới).
@@ -130,7 +131,7 @@ Chạy trong Studio (Play, hoặc Test → 2 người chơi). Để test nhanh t
 
 ## Điều chưa làm / lưu ý
 
-- `DataService` chưa có session locking — TODO chuyển sang ProfileStore (ghi chú trong file).
+- `DataService` dùng ProfileStore (khóa phiên): người chơi vào server mới khi server cũ chưa nhả khóa sẽ chờ tối đa ~40 giây; bị server khác giành phiên khi đang chơi thì bị kick (`DataSessionEnded`). Store `EqualSocial_PlayerData_v2` (định dạng ProfileStore); store v1 cũ không được đọc lại (place chưa từng publish nên không có dữ liệu thật). **Chưa kiểm chứng khóa phiên giữa hai server thật** (cần publish và vào 2 server).
 - Chưa có test tự động trong Studio; kiểm tra tự động hiện chỉ gồm biên dịch, type-check, lint và `rojo build`.
 - Đã smoke-test thủ công trong Studio thật (làm nghề, trạm, mua hàng bằng chuột, tự đóng cửa sổ, kiệt sức, chống gian lận qua Remote). **Chưa kiểm chứng lưu/tải bằng DataStore thật** vì place thử chưa publish; cần bạn thử theo mục 9.
 - Công cụ MCP `execute_luau` chạy trong sandbox: không `require` được module dự án và không gọi được RemoteFunction. Muốn test sâu, đặt tạm một Script/LocalScript thử vào place (đừng commit vào `src/`).
