@@ -1,4 +1,6 @@
 std = "roblox"
+# Thư viện bên thứ ba (ProfileStore) giữ nguyên bản gốc, không lint
+exclude = ["src/server/Vendor/**"]
 
 [lints]
 # Các service dùng self ở dạng bảng singleton, không cần cảnh báo shadowing theo kiểu này.

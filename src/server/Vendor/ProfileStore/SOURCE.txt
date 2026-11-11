@@ -1,0 +1,6 @@
+ProfileStore (MAD STUDIO, by loleris) — thư viện bên thứ ba, KHÔNG sửa trực tiếp.
+Nguồn: https://github.com/MadStudioRoblox/ProfileStore
+Commit: 45c9847cbcf1fc260369c50eb335aba7c35aecdd (2025-07-31), file ProfileStore.luau -> init.luau
+Giấy phép: Apache License 2.0 (xem LICENSE).
+Cập nhật: tải lại ProfileStore.luau ở commit mới, đọc thay đổi, ghi commit mới vào đây.
+Thư mục này được loại khỏi stylua (.styluaignore), selene (selene.toml) và type-check (--ignore).

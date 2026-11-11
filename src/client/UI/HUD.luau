@@ -30,6 +30,9 @@ type SkillRow = {
 type Fields = {
 	Money: TextLabel,
 	Fame: TextLabel,
+	NetWorth: TextLabel,
+	Day: TextLabel,
+	Aura: TextLabel,
 	Stats: { [string]: StatRow },
 	Skills: { [string]: SkillRow },
 }
@@ -94,6 +97,22 @@ function HUD.new(parent: Instance): HUD
 	fame.Size = UDim2.new(1, 0, 0, 20)
 	fame.LayoutOrder = nextOrder()
 
+	local netWorth = Theme.label(root, "", 17, Theme.Colors.Text, Theme.Fonts.Semibold)
+	netWorth.Name = "NetWorth"
+	netWorth.Size = UDim2.new(1, 0, 0, 20)
+	netWorth.LayoutOrder = nextOrder()
+
+	local day = Theme.label(root, "", 16, Theme.Colors.TextMuted, Theme.Fonts.Regular)
+	day.Name = "Day"
+	day.Size = UDim2.new(1, 0, 0, 20)
+	day.LayoutOrder = nextOrder()
+
+	local aura =
+		Theme.label(root, Config.Text.HudAuraNone, 16, Theme.KindColors.aura, Theme.Fonts.Regular)
+	aura.Name = "Aura"
+	aura.Size = UDim2.new(1, 0, 0, 20)
+	aura.LayoutOrder = nextOrder()
+
 	newHeader(root, Config.Text.HudStats, nextOrder())
 
 	local statRows: { [string]: StatRow } = {}
@@ -154,12 +173,37 @@ function HUD.new(parent: Instance): HUD
 		skillRows[skillId] = { Title = title, Info = info, Fill = fill }
 	end
 
-	return setmetatable({ Money = money, Fame = fame, Stats = statRows, Skills = skillRows }, HUD)
+	return setmetatable({
+		Money = money,
+		Fame = fame,
+		NetWorth = netWorth,
+		Day = day,
+		Aura = aura,
+		Stats = statRows,
+		Skills = skillRows,
+	}, HUD)
+end
+
+-- Dòng "Hôm nay: Thứ Ba" (client tự tính từ giờ server, chỉ để hiển thị)
+function HUD.SetDay(self: HUD, text: string)
+	self.Day.Text = text
+end
+
+-- Dòng sự kiện đang chạy của AURA ("AURA: Khủng hoảng lương thực · 7:42")
+function HUD.SetAura(self: HUD, text: string)
+	self.Aura.Text = text
 end
 
 function HUD.Render(self: HUD, state: Types.Snapshot)
 	self.Money.Text = Format.money(state.Money)
 	self.Fame.Text = string.format(Config.Text.HudFame, Format.number(state.Fame))
+
+	local rank = state.Rank
+	local rankText = if rank
+		then string.format(Config.Text.HudRank, rank)
+		else string.format(Config.Text.HudRankNone, Config.Leaderboard.TopCount)
+	self.NetWorth.Text =
+		`{string.format(Config.Text.HudNetWorth, Format.money(state.NetWorth))} · {rankText}`
 
 	for statId, row in self.Stats do
 		local def = Config.Stats.Defs[statId]

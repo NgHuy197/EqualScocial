@@ -122,13 +122,21 @@ function ReplicationService:BuildSnapshot(player: Player): Types.Snapshot?
 		owned[itemId] = true
 	end
 
+	local assets: { [string]: number } = {}
+	for assetId, record in data.Assets do
+		assets[assetId] = record.Missed
+	end
+
 	return {
 		Seq = seq,
 		Money = data.Money,
-		Fame = services.Shop:GetFame(player),
+		Fame = services.Shop:GetFame(player) + services.Assets:GetFame(player),
+		NetWorth = services.Leaderboard:GetNetWorth(player),
+		Rank = services.Leaderboard:GetRank(player),
 		Stats = stats,
 		Skills = skills,
 		Owned = owned,
+		Assets = assets,
 	}
 end
 

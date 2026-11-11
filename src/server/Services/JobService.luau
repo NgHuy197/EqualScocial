@@ -15,6 +15,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Format)
 local Types = require(ReplicatedStorage.Shared.Types)
+local Describe = require(script.Parent.Parent.Util.Describe)
 local Prompts = require(script.Parent.Parent.Util.Prompts)
 
 type JobDef = Config.JobDef
@@ -33,6 +34,14 @@ local function validateConfig()
 			if not Config.Stats.Defs[statId] then
 				warn(
 					`[JobService] Job '{jobId}' có StatDelta cho chỉ số không tồn tại: {statId}`
+				)
+			end
+		end
+		local requires: { Config.Requirement } = job.Requires or {}
+		for _, requirement in requires do
+			if not Config.Skills.Defs[requirement.Skill] then
+				warn(
+					`[JobService] Job '{jobId}' yêu cầu kỹ năng không tồn tại: {requirement.Skill}`
 				)
 			end
 		end
@@ -56,10 +65,10 @@ function JobService:Start()
 		end
 		return {
 			ActionText = job.ActionText,
-			ObjectText = job.Name,
+			ObjectText = Describe.JobTitle(job), -- nghề có điều kiện hiện kèm "(cần ...)"
 			HoldDuration = job.HoldDuration,
 			OnTriggered = function(player: Player)
-				self:_work(player, job)
+				self:_work(player, job, jobId)
 			end,
 			-- Báo sớm nếu quá mệt, đỡ phải giữ phím cả vài giây rồi mới biết
 			OnHoldBegan = function(player: Player)
@@ -82,10 +91,33 @@ function JobService:_canWork(player: Player, job: JobDef): (boolean, string?)
 	if energy < minEnergy then
 		return false, string.format(Config.Text.TooTired, minEnergy)
 	end
+
+	-- Điều kiện mở khóa: liệt kê các kỹ năng chưa đủ level (kèm level hiện tại)
+	local missing: { string } = {}
+	local requires: { Config.Requirement } = job.Requires or {}
+	for _, requirement in requires do
+		local level = services.Skills:GetLevel(player, requirement.Skill)
+		if level < requirement.Level then
+			local def = Config.Skills.Defs[requirement.Skill]
+			table.insert(
+				missing,
+				string.format(
+					Config.Text.RequirementProgress,
+					if def then def.Name else requirement.Skill,
+					requirement.Level,
+					level
+				)
+			)
+		end
+	end
+	if #missing > 0 then
+		return false, string.format(Config.Text.JobLocked, table.concat(missing, ", "))
+	end
 	return true, nil
 end
 
-function JobService:_work(player: Player, job: JobDef)
+-- jobId (tuỳ chọn) dùng cho sự kiện của AURA: hệ số lương nghề thiếu người và ghi nhận số người đang làm
+function JobService:_work(player: Player, job: JobDef, jobId: string?)
 	local canWork, reason = self:_canWork(player, job)
 	if not canWork then
 		if reason then
@@ -96,10 +128,14 @@ function JobService:_work(player: Player, job: JobDef)
 
 	-- Lương tính theo level TRƯỚC khi cộng XP của lượt này
 	local multiplier = services.Skills:GetPayMultiplier(player, job.Skill)
-	local pay = math.floor(job.BasePay * multiplier + 0.5)
+	local eventBonus = if jobId then services.Aura:GetPayMultiplier(jobId) else 1
+	local pay = math.floor(job.BasePay * multiplier * eventBonus + 0.5)
 	local xp = job.XPReward or Config.JobRules.XPPerShift
 
 	local paid = services.Economy:Add(player, pay, Config.Reasons.Job)
+	if jobId then
+		services.Aura:NoteWork(player, jobId)
+	end
 	services.Stats:Modify(player, job.StatDelta)
 	services.Skills:AddXP(player, job.Skill, xp)
 

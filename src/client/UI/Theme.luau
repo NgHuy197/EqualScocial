@@ -39,6 +39,7 @@ Theme.KindColors = {
 	warning = Theme.Colors.Warn,
 	error = Theme.Colors.Bad,
 	levelup = Theme.Colors.Fame,
+	aura = Color3.fromRGB(160, 120, 240),
 } :: { [string]: Color3 }
 
 function Theme.corner(parent: Instance, radius: number?): UICorner
