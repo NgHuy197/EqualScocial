@@ -24,6 +24,9 @@ local WAIT_TIMEOUT = 30
 --   OpenLeaderboard()       : mở panel bảng xếp hạng sau khi ProximityPrompt của bảng kích hoạt
 --   OpenAura()              : mở cửa sổ Trụ sở AURA sau khi ProximityPrompt kích hoạt
 --   AuraUpdate(auraState)   : trạng thái chung của AURA (sự kiện, đấu giá, hệ số...) cho mọi người chơi
+--   PvpUpdate(pvpState)     : trạng thái đấu trường của riêng người chơi (Types.PvpState)
+-- Client -> Server (không trả về)
+--   PvpAttack()             : đánh đối thủ trong trận PvP (server tự biết mục tiêu)
 local EVENTS = {
 	"StateUpdate",
 	"Notify",
@@ -31,6 +34,8 @@ local EVENTS = {
 	"OpenLeaderboard",
 	"OpenAura",
 	"AuraUpdate",
+	"PvpUpdate",
+	"PvpAttack",
 }
 
 -- Client -> Server (có trả về)

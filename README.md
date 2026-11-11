@@ -2,7 +2,7 @@
 
 Game Roblox nhiều người chơi: một xã hội mà **mọi người xuất phát như nhau** (cùng tiền, cùng chỉ số, không gia thế, không bệnh tật) và cạnh tranh công bằng bằng cách học skill, làm nghề, luyện tập, rồi mua tài sản để khoe. Mọi tài sản thuộc về siêu máy tính AI **AURA**. Lối chơi giống Stardew Valley + The Sims nhưng đề cao tương tác và cạnh tranh giữa người chơi.
 
-Trạng thái: **v0.3** (MVP v0.1 + trường học, đánh quái, bảng xếp hạng + AURA cai quản tài sản). Chữ hiển thị trong game là tiếng Việt.
+Trạng thái: **v0.4** (MVP v0.1 + trường học, đánh quái, bảng xếp hạng + AURA cai quản tài sản + Đấu trường 1v1 và Season). Chữ hiển thị trong game là tiếng Việt.
 
 Tài liệu: [docs/GDD.md](docs/GDD.md) (thiết kế, công thức, lộ trình) · [CLAUDE.md](CLAUDE.md) (luật kiến trúc, checklist test cho người và Claude Code).
 
@@ -28,6 +28,13 @@ Tài liệu: [docs/GDD.md](docs/GDD.md) (thiết kế, công thức, lộ trình
 - **Sự kiện ngẫu nhiên**: khủng hoảng hoặc khuyến mãi đồ ăn, thiếu lao động (+25% lương), ngày không thuế.
 - **Đấu giá tài sản hiếm** (Biệt thự, Xe thể thao; kho giới hạn toàn cầu): tiền khóa khi đặt giá, phí 2%, chống chốt phút chót.
 - **Bộ điều chỉnh lạm phát** công khai: hệ số chính sách 0,5–2,0 nhân vào phí và thuế, nhật ký trong tab Báo cáo.
+
+**Cân bằng sau v0.3**
+- **Cooldown trạm theo từng người chơi** (Tắm 2 phút, Giường 3 phút, Ghế 45 giây), lưu trong dữ liệu: thu nhập tối ưu Lv0 giảm từ ≈ $15.000/giờ xuống ≈ $1.700–4.000/giờ.
+
+**v0.4**
+- **Đấu trường 1v1**: hàng chờ ở quầy, máu PvP riêng (không chết, không mất tiền), phím F / nút "Đánh", luật hết giờ / ra khỏi sàn / thoát game, điểm Elo theo mùa. **Không có cá cược hay quỹ thưởng** (Roblox cấm cờ bạc mô phỏng).
+- **Season**: tăng `Config.Season.Id` để bắt đầu mùa mới, mọi người về vạch xuất phát; hồ sơ mùa cũ lưu vào lịch sử, danh hiệu theo thành tích; HUD đếm ngược tới cuối mùa.
 
 ## Cài đặt từng bước
 
@@ -86,7 +93,7 @@ Nếu chưa làm 2 bước này, game **vẫn chạy được** nhưng ở chế
 
 ### 6. Chơi thử
 
-Nhấn **Play** (F5). Map placeholder tự dựng (các khối có nhãn), xung quanh điểm xuất phát ở gốc toạ độ: 4 nghề ở x = −60, 3 trạm (Vòi tắm / Giường / Ghế công viên) ở x = +60, 2 cửa hàng ở z = −70, bảng xếp hạng 3D ở z = +45, Trụ sở AURA ở (65, 55), 4 lớp học ở z = +75, Bãi luyện tập quanh z = +120 và Bệnh xá ở (−75, 120). Đến gần khối, giữ **E** để làm việc/học/dùng trạm, nhấn **E** ở cửa hàng, bảng xếp hạng, Trụ sở AURA hoặc vào quái để mở cửa sổ/đánh quái.
+Nhấn **Play** (F5). Map placeholder tự dựng (các khối có nhãn), xung quanh điểm xuất phát ở gốc toạ độ: 4 nghề ở x = −60, 3 trạm (Vòi tắm / Giường / Ghế công viên) ở x = +60, 2 cửa hàng ở z = −70, bảng xếp hạng 3D ở z = +45, Trụ sở AURA ở (65, 55), Đấu trường ở (0, −125) với quầy hàng chờ ở (0, −89), 4 lớp học ở z = +75, Bãi luyện tập quanh z = +120 và Bệnh xá ở (−75, 120). Đến gần khối, giữ **E** để làm việc/học/dùng trạm, nhấn **E** ở cửa hàng, bảng xếp hạng, Trụ sở AURA hoặc vào quái để mở cửa sổ/đánh quái.
 
 > Prompt **E** của Roblox chỉ hiện khi khối nằm trong tầm nhìn camera: hãy quay mặt về phía khối.
 
@@ -98,7 +105,7 @@ Checklist test đầy đủ ở [CLAUDE.md](CLAUDE.md#checklist-test-thủ-công
 default.project.json   rokit.toml   selene.toml   stylua.toml
 src/
   shared/   Config.luau (mọi số liệu + chữ), Remotes, Format, Types, Calendar
-  server/   init.server.luau, WorldBuilder.luau, Services/ (14 service), Util/
+  server/   init.server.luau, WorldBuilder.luau, Services/ (16 service), Util/
   client/   init.client.luau, UI/ (Theme, HUD, Toast, ShopWindow, LeaderboardWindow, AuraWindow)
 docs/GDD.md
 ```

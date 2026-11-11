@@ -36,15 +36,41 @@ export type AuraRecord = {
 }
 
 -- Dữ liệu lưu vào DataStore (dựng template ở DataService)
+-- Thành tích PvP trong mùa hiện tại (reset khi sang mùa)
+export type PvpRecord = {
+	Rating: number,
+	Wins: number,
+	Losses: number,
+	Draws: number,
+}
+-- Hồ sơ một mùa đã kết thúc (giữ qua các mùa)
+export type SeasonRecord = {
+	SeasonId: number,
+	Name: string,
+	Money: number, -- tiền lúc sang mùa
+	PeakNetWorth: number,
+	Rating: number,
+	Wins: number,
+	Losses: number,
+	Draws: number,
+	Titles: { string }, -- danh hiệu nhận được ở mùa đó
+}
 export type PlayerData = {
 	SchemaVersion: number,
 	Money: number,
 	Stats: { [string]: number },
 	Skills: { [string]: SkillRecord },
 	Owned: { [string]: boolean }, -- itemId -> true (đồ sở hữu vĩnh viễn)
+	StationUsed: { [string]: number }, -- stationId -> os.time() lần dùng gần nhất (cooldown trạm)
 	Combat: CombatRecord,
 	Assets: { [string]: AssetRecord }, -- assetId -> tài sản đang thuê từ AURA
 	Aura: AuraRecord,
+	-- v0.4
+	SeasonId: number, -- mùa của phần dữ liệu "theo mùa"; khác Config.Season.Id => sang mùa mới
+	Pvp: PvpRecord,
+	PeakNetWorth: number, -- tài sản ròng cao nhất trong mùa (LeaderboardService cập nhật)
+	History: { SeasonRecord }, -- KHÔNG reset: hồ sơ các mùa trước, mới nhất ở cuối
+	Titles: { string }, -- KHÔNG reset: danh hiệu đã nhận, mới nhất ở cuối
 }
 
 export type SkillSnapshot = {
@@ -64,6 +90,23 @@ export type Snapshot = {
 	Skills: { [string]: SkillSnapshot },
 	Owned: { [string]: boolean },
 	Assets: { [string]: number }, -- assetId -> số chu kỳ đang nợ phí duy trì (0 = đúng hạn)
+	Season: SeasonSnapshot,
+}
+export type SeasonSnapshot = {
+	Name: string,
+	EndsAt: number, -- Unix giây (chỉ để đếm ngược)
+	Pvp: PvpRecord,
+	Title: string?, -- danh hiệu mới nhất
+}
+-- Trạng thái đấu trường của MỘT người chơi (server -> client qua PvpUpdate)
+export type PvpState = {
+	State: string, -- "idle" | "queue" | "countdown" | "fight"
+	OpponentName: string?,
+	MyHP: number?,
+	OpponentHP: number?,
+	MaxHP: number?,
+	StartsAt: number?, -- giờ server (GetServerTimeNow) lúc bắt đầu đánh
+	EndsAt: number?, -- giờ server lúc hết giờ
 }
 
 export type LeaderboardEntry = {

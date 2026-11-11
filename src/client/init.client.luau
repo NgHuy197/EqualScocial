@@ -6,6 +6,7 @@
 	cửa hàng. Không có logic tiền/chỉ số nào ở đây; nút Mua chỉ gửi yêu cầu, server quyết định.
 ]]
 
+local ContextActionService = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -142,6 +143,91 @@ local function updateAuraHud()
 	end
 end
 
+-- ── Mùa và Đấu trường (v0.4) ──
+local pvpAttack = Remotes.Event("PvpAttack")
+local pvpState: Types.PvpState = { State = "idle" }
+local PVP_ACTION = "EqualSocialPvpAttack"
+local pvpBound = false
+
+-- Dòng mùa: tên, thời gian còn lại tới EndsAt (giờ server), điểm PvP, danh hiệu mới nhất
+local function updateSeasonHud()
+	local current = state
+	if not current then
+		return
+	end
+	local season = current.Season
+	local remaining = season.EndsAt - Workspace:GetServerTimeNow()
+	local text
+	if remaining > 0 then
+		local days = math.floor(remaining / 86400)
+		local left = if days >= 1
+			then string.format(Config.Text.SeasonDays, days)
+			else string.format(
+				Config.Text.SeasonHours,
+				math.max(1, math.ceil(remaining / 3600))
+			)
+		text = string.format(Config.Text.HudSeason, season.Name, left, season.Pvp.Rating)
+	else
+		text = string.format(Config.Text.HudSeasonEnded, season.Name, season.Pvp.Rating)
+	end
+	if season.Title then
+		text ..= "\n" .. season.Title
+	end
+	hud:SetSeason(text)
+end
+
+local function updatePvpHud()
+	local current = pvpState
+	if current.State == "queue" then
+		hud:SetPvp(Config.Text.PvpHudQueue)
+	elseif current.State == "countdown" then
+		local wait = math.max(0, math.ceil((current.StartsAt or 0) - Workspace:GetServerTimeNow()))
+		hud:SetPvp(string.format(Config.Text.PvpHudCountdown, current.OpponentName or "?", wait))
+	elseif current.State == "fight" then
+		local remaining = Format.duration((current.EndsAt or 0) - Workspace:GetServerTimeNow())
+		hud:SetPvp(
+			string.format(
+				Config.Text.PvpHudFight,
+				current.MyHP or 0,
+				current.OpponentHP or 0,
+				current.OpponentName or "?",
+				remaining
+			)
+		)
+	else
+		hud:SetPvp(nil)
+	end
+end
+
+-- Phím F (và nút "Đánh" trên điện thoại) chỉ gắn khi đang trong pha đánh. Client chỉ GỬI yêu cầu;
+-- server kiểm tra trận, nhịp đánh và khoảng cách.
+local function setAttackBinding(enabled: boolean)
+	if enabled == pvpBound then
+		return
+	end
+	pvpBound = enabled
+	if enabled then
+		ContextActionService:BindAction(PVP_ACTION, function(_name, inputState: Enum.UserInputState)
+			if inputState == Enum.UserInputState.Begin then
+				pvpAttack:FireServer()
+			end
+			return Enum.ContextActionResult.Sink
+		end, true, Enum.KeyCode.F, Enum.KeyCode.ButtonX)
+		ContextActionService:SetTitle(PVP_ACTION, Config.Text.PvpAttackButton)
+	else
+		ContextActionService:UnbindAction(PVP_ACTION)
+	end
+end
+
+Remotes.Event("PvpUpdate").OnClientEvent:Connect(function(newState: any)
+	if type(newState) ~= "table" or type(newState.State) ~= "string" then
+		return
+	end
+	pvpState = newState :: Types.PvpState
+	setAttackBinding(pvpState.State == "fight")
+	updatePvpHud()
+end)
+
 -- Chỉ áp dụng snapshot mới hơn bản hiện có (GetState và StateUpdate có thể đến lệch thứ tự)
 local function applySnapshot(snapshot: any)
 	if type(snapshot) ~= "table" or type(snapshot.Seq) ~= "number" then
@@ -156,6 +242,7 @@ local function applySnapshot(snapshot: any)
 	hud:Render(typed)
 	shopWindow:Refresh(typed)
 	auraWindow:SetSnapshot(typed)
+	updateSeasonHud()
 end
 
 Remotes.Event("StateUpdate").OnClientEvent:Connect(applySnapshot)
@@ -207,6 +294,8 @@ task.spawn(function()
 			hud:SetDay(string.format(Config.Text.HudDay, Calendar.DayName(day)))
 		end
 		updateAuraHud()
+		updateSeasonHud()
+		updatePvpHud()
 		task.wait(1)
 	end
 end)

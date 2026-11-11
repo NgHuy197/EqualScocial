@@ -8,7 +8,7 @@ Game Roblox nhiều người chơi, viết bằng Luau + Rojo. **Mọi chữ hi�
 
 Một xã hội giống ngoài đời, nhưng mọi người chơi **xuất phát như nhau**: cùng tiền ($100), cùng chỉ số, không gia thế, không bệnh tật. Người chơi cạnh tranh công bằng bằng cách học skill, làm nghề, luyện tập, đấu với nhau rồi mua tài sản để khoe. Mọi tài sản thuộc sở hữu và do siêu máy tính AI **AURA** cai quản. Lối chơi giống Stardew Valley + The Sims, nhưng đề cao tương tác và cạnh tranh giữa người chơi.
 
-Trạng thái: **v0.3** (MVP v0.1 + trường học, đánh quái, bảng xếp hạng + AURA cai quản: tài sản thuê, thuế, sự kiện, đấu giá, lạm phát; xem GDD mục 4, 6, 7). Lộ trình: v0.4 PvP + Season.
+Trạng thái: **v0.4** (MVP v0.1 + trường học, đánh quái, bảng xếp hạng + AURA cai quản + Đấu trường 1v1 và Season; xem GDD mục 4, 6, 7, 8). Cá cược PvP đã bị bỏ vì Roblox cấm cờ bạc mô phỏng (GDD 8.0).
 
 ## Lệnh
 
@@ -41,9 +41,9 @@ src/client  → StarterPlayer.StarterPlayerScripts.Client      init.client.luau,
 - `Config.luau`: **toàn bộ** số liệu cân bằng và câu chữ hiển thị (`Config.Text`).
 - `Remotes.luau`: danh sách RemoteEvent/RemoteFunction. Server gọi `Remotes.Init()` một lần; nơi khác dùng `Remotes.Event(name)` / `Remotes.Function(name)`.
 - `Calendar.luau`: lịch trong game thuần tính toán từ giờ server (`workspace:GetServerTimeNow()`), dùng chung server (lớp mở/đóng) và client (HUD).
-- `Services/*` (thứ tự khởi động trong `init.server.luau`): `DataService`, `EconomyService`, `StatsService`, `SkillService`, `JobService`, `StationService`, `ShopService`, `SchoolService`, `CombatService`, `AssetService` (thuê/trả tài sản, phí duy trì, thu hồi), `AuctionService` (đấu giá tài sản hiếm, tiền khóa), `AuraService` (chu kỳ, thuế, sự kiện, lạm phát, Báo cáo), `LeaderboardService`, `ReplicationService`.
+- `Services/*` (thứ tự khởi động trong `init.server.luau`): `DataService`, `EconomyService`, `StatsService`, `SkillService`, `JobService`, `StationService`, `ShopService`, `SchoolService`, `CombatService`, `AssetService` (thuê/trả tài sản, phí duy trì, thu hồi), `AuctionService` (đấu giá tài sản hiếm, tiền khóa), `AuraService` (chu kỳ, thuế, sự kiện, lạm phát, Báo cáo), `SeasonService` (thông báo sang mùa, phần Season của snapshot), `PvpService` (hàng chờ, trận 1v1, Elo), `LeaderboardService`, `ReplicationService`. `DataService` có thêm `OnReleasing(cb)` (chạy đồng bộ trước khi dữ liệu người rời game bị gỡ) và `TakeRollover(player)`.
 - `Vendor/ProfileStore`: thư viện ProfileStore (MAD STUDIO, Apache 2.0) giữ **nguyên bản gốc**, không sửa; nguồn và commit ghi trong `SOURCE.txt`. Được loại khỏi StyLua (`.styluaignore`), Selene (`exclude` trong `selene.toml`) và type-check (`--ignore`). Chỉ `DataService` require nó.
-- `Util/*`: `Validate` (kiểm tra dữ liệu/khoảng cách), `RateLimiter`, `Prompts` (gắn ProximityPrompt theo tag có cooldown + kiểm tra khoảng cách phía server), `Describe` (chuỗi mô tả nghề/điều kiện dùng chung), `MonsterModel` (dựng quái và thanh máu), `BoardGui` (vẽ chữ lên bảng xếp hạng 3D), `AssetRegistry` (kho tài sản hiếm toàn cầu trong DataStore, nhận/trả nguyên tử bằng `UpdateAsync`; Studio không API thì dùng bản cục bộ).
+- `Util/*`: `Validate` (kiểm tra dữ liệu/khoảng cách), `RateLimiter`, `Prompts` (gắn ProximityPrompt theo tag có cooldown + kiểm tra khoảng cách phía server), `Describe` (chuỗi mô tả nghề/điều kiện dùng chung), `MonsterModel` (dựng quái và thanh máu), `BoardGui` (vẽ chữ lên bảng xếp hạng 3D), `AssetRegistry` (kho tài sản hiếm toàn cầu trong DataStore, nhận/trả nguyên tử bằng `UpdateAsync`; Studio không API thì dùng bản cục bộ), `Season` (logic thuần sang mùa: lưu lịch sử, trao danh hiệu, reset về template).
 - Client `UI/*`: `Theme`, `HUD`, `Toast`, `ShopWindow`, `LeaderboardWindow`, `AuraWindow` (3 tab Tài sản / Đấu giá / Báo cáo).
 - `WorldBuilder`: dựng map placeholder nếu Workspace chưa có `World`; map thật chỉ cần gắn **tag + attribute** (xem bên dưới).
 
@@ -88,6 +88,8 @@ Model/Part đặt trong Workspace, có ít nhất một `BasePart` (prompt gắn
 | Bệnh xá | `ES_Infirmary` | (không) | nơi hồi sinh khi thua trận |
 | Bảng xếp hạng 3D | `ES_Leaderboard` | (không) | `LeaderboardService` tự vẽ `SurfaceGui` lên mặt trước (-Z) |
 | Trụ sở AURA | `ES_Aura` | (không) | nhấn E mở cửa sổ AURA |
+| Quầy Đấu trường | `ES_Arena` | (không) | nhấn E vào / rời hàng chờ |
+| Bục xuất phát | `ES_ArenaPad` | `PadIndex` | `1` hoặc `2`; tâm đấu trường = trung điểm hai bục |
 
 Tag `ES_Monster` do `CombatService` tự gắn lên quái đang sống, không gắn tay. Nếu Workspace đã có thư mục/model tên `World`, WorldBuilder không dựng gì thêm.
 
@@ -99,7 +101,7 @@ Chạy trong Studio (Play, hoặc Test → 2 người chơi). Để test nhanh t
 2. **Làm việc nhận tiền**: giữ E 4 giây ở *Bốc vác kho hàng* → +$12 (tiền $112), +10 XP Sức mạnh, Năng lượng −6, Độ no −4, Sạch sẽ −5, Căng thẳng +3; có toast. *Pha chế cà phê* (3 giây) → +$10, XP Giao tiếp.
 3. **Lên cấp & lương**: làm 5 lượt cùng một nghề → toast "lên cấp 1"; lượt kế lương = round(12 × 1.1) = $13.
 4. **Quá mệt**: hạ Năng lượng dưới 15 (làm liên tục ~15 lượt) → giữ phím báo "quá mệt", không nhận tiền/XP.
-5. **Trạm miễn phí**: Tắm +40 Sạch sẽ; Giường +40 Năng lượng, −10 Căng thẳng; Ghế công viên −6 Căng thẳng, +4 Hạnh phúc. Giá trị không vượt quá 0–100.
+5. **Trạm miễn phí**: Tắm +40 Sạch sẽ; Giường +40 Năng lượng, −10 Căng thẳng; Ghế công viên −6 Căng thẳng, +4 Hạnh phúc. Giá trị không vượt quá 0–100. Dùng lại cùng trạm trước cooldown (Tắm 2 phút, Giường 3 phút, Ghế 45 giây) → toast "cần chờ thêm …", không có tác dụng; thoát ra vào lại vẫn còn cooldown.
 6. **Cửa hàng**: mở bằng E; Bánh mì $10 (+30 Độ no), Phở $25 (+60 Độ no, +5 Hạnh phúc), Nước suối $5 (+8 Độ no, +5 Năng lượng); thiếu tiền → "Bạn không đủ tiền". Kính râm $200 (Nổi tiếng +5), Đồng hồ vàng $600 (+15); mua lần hai → nút "Đã sở hữu" và server từ chối. Đi xa hơn ~14 studs → cửa sổ tự đóng kèm toast.
 7. **Chỉ số tụt theo thời gian** (đứng yên): mỗi phút Độ no −2, Năng lượng −1.5, Sạch sẽ −1; khi cả ba còn ≥ 30 thì Hạnh phúc +0.5/phút và Căng thẳng −0.5/phút. Khi một nhu cầu < 30: Hạnh phúc −1/phút, Căng thẳng +1/phút (mỗi nhu cầu thấp tính một lần).
 8. **Kiệt sức**: đặt `Config.Stats.TimeScale = 300` rồi đứng chờ (Độ no về 0 sau ≈ 7 giây thực, kiệt sức sau ≈ 12 giây) → toast "kiệt sức", mất 10% tiền, respawn ở Spawn, chỉ số về mức an toàn (60/60/60/50/30/60). Nhớ trả `TimeScale` về `1`.
@@ -129,6 +131,22 @@ Chạy trong Studio (Play, hoặc Test → 2 người chơi). Để test nhanh t
 26. **Lạm phát**: mỗi 3 chu kỳ, nếu tiền trung bình lệch mục tiêu $5.000 quá ±10% thì hệ số chính sách đổi (tối đa ±10%/lần, trong 0,5–2,0), có thông báo toàn server và dòng mới trong nhật ký Báo cáo.
 27. **Chống gian lận v0.3**: gọi `AssetLease`/`AssetReturn`/`AuctionBid` với tham số sai kiểu → "Yêu cầu không hợp lệ"; khi đứng xa Trụ sở → "quá xa"; > 4 lần/5 giây → "thao tác quá nhanh"; `GetAuraState` > 3 lần/10 giây → trả `nil`. Đặt giá thấp hơn mức tối thiểu hoặc không đủ tiền → từ chối, không khóa tiền.
 
+**Checklist v0.4** (Đấu trường ở (0, −125), quầy ở (0, −89); trận cần **Test → 2 người chơi**):
+
+28. **HUD mùa**: dòng "Mùa 1 · còn … ngày · PvP 1000 điểm".
+29. **Hàng chờ**: nhấn E ở quầy → toast "vào hàng chờ", HUD "Đấu trường: đang chờ ghép cặp"; nhấn lần nữa → rời. Năng lượng < 20 → từ chối.
+30. **Trận**: hai người vào hàng chờ → dịch chuyển lên hai bục, đếm ngược 3 giây, HUD hiện máu hai bên và thời gian; F (hoặc nút "Đánh") khi trong 10 studs → đối thủ −10 máu, tối đa 1 đòn/giây. Máu nhân vật không đổi, không mất tiền.
+31. **Luật**: hạ gục → thắng (+16 / −16 khi ngang điểm); ra xa tâm > 34 studs → thua; hết 60 giây → nhiều máu hơn thắng, bằng máu → hòa; một người thoát game → người kia thắng. Sau trận cả hai về cạnh quầy, Năng lượng −10, Căng thẳng +8, có XP Sức mạnh.
+32. **Sang mùa** (place thử): tăng tạm `Config.Season.Id` lên 2 → vào game: toast chào Mùa 2, tiền $100, kỹ năng/đồ/tài sản/PvP reset, danh hiệu (nếu đạt) xuất hiện trên HUD. Trả `Id` về 1 (dữ liệu thử đã sang mùa 2 sẽ được coi là mùa khác và bị reset lần nữa, nên chỉ thử trên dữ liệu dev).
+33. **Chống gian lận v0.4**: `PvpAttack:FireServer()` khi không trong trận → không có gì; dồn dập → bị rate-limit, không lỗi.
+
+**Kiểm chứng sau khi publish** (cần bạn: File → Publish to Roblox, bật *Enable Studio Access to API Services*, dùng experience dev):
+
+34. **ProfileStore**: Output có `[ProfileStore]: Roblox API services available - data will be saved`, không có warn "KHÔNG LƯU". Kiếm tiền, mua Kính râm → Stop → Play: còn nguyên (mục 9).
+35. **Khóa phiên**: publish rồi vào game thật bằng 2 thiết bị / 2 server (hoặc vào server A rồi nhảy sang server B ngay): server B chờ tối đa ~40 giây rồi mới tải, dữ liệu là bản server A vừa lưu; không bao giờ có hai bản cùng chạy.
+36. **Bảng xếp hạng thật**: panel không còn ghi "chỉ gồm người chơi trong máy chủ này"; hạng còn sau khi vào lại.
+37. **Registry tài sản hiếm**: tab Báo cáo không còn ghi registry cục bộ; thắng đấu giá ở server A → số còn lại giảm ở server B (sau tối đa 30 giây cache).
+
 ## Điều chưa làm / lưu ý
 
 - `DataService` dùng ProfileStore (khóa phiên): người chơi vào server mới khi server cũ chưa nhả khóa sẽ chờ tối đa ~40 giây; bị server khác giành phiên khi đang chơi thì bị kick (`DataSessionEnded`). Store `EqualSocial_PlayerData_v2` (định dạng ProfileStore); store v1 cũ không được đọc lại (place chưa từng publish nên không có dữ liệu thật). **Chưa kiểm chứng khóa phiên giữa hai server thật** (cần publish và vào 2 server).
@@ -137,6 +155,7 @@ Chạy trong Studio (Play, hoặc Test → 2 người chơi). Để test nhanh t
 - Công cụ MCP `execute_luau` chạy trong sandbox: không `require` được module dự án và không gọi được RemoteFunction. Muốn test sâu, đặt tạm một Script/LocalScript thử vào place (đừng commit vào `src/`).
 - v0.2 đã smoke-test trong Studio thật (học ở Xưởng, lớp đóng cửa, đánh quái, thua trận → Bệnh xá, panel bảng xếp hạng, giới hạn `GetLeaderboard`). **Chưa kiểm chứng OrderedDataStore thật** (cần publish place).
 - v0.3 đã smoke-test trong Studio thật (mở Trụ sở, thuê Phòng trọ bằng chuột, phí duy trì, đặt giá và chốt phiên Xe thể thao, tab Báo cáo) với registry cục bộ; logic chu kỳ/thuế/sự kiện/lạm phát/đấu giá có harness Luau CLI ngoài repo. **Chưa kiểm chứng registry DataStore thật** (cần publish place).
+- v0.4 đã smoke-test trong Studio (map Đấu trường, dòng Mùa trên HUD, vào/rời hàng chờ, cooldown Giường) nhưng **trận 1v1 chưa chạy với 2 người chơi thật** (MCP chỉ điều khiển một client); logic trận, Elo, luật kết thúc, thoát giữa trận và sang mùa có harness. Hãy chạy mục 30–31 bằng Test → 2 người chơi.
 - UI dựng bằng code: **đừng dựng lại cả danh sách mỗi lần snapshot/mỗi giây**, nút đang bị click sẽ bị huỷ; chỉ dựng lại khi dữ liệu đổi và cập nhật đồng hồ tại chỗ (xem `AuraWindow`).
 - Chuỗi trong `Config.Text` đi qua `string.format` phải viết `%%` cho dấu phần trăm.
 - Khi test tự động: prompt chỉ hiện nếu khối trong tầm nhìn camera. Đặt `workspace.CurrentCamera.CameraType = Scriptable` rồi `CFrame = CFrame.lookAt(...)` về phía khối. Khi hồi sinh, vị trí nhân vật lúc `CharacterAdded` còn ở gốc toạ độ; engine đặt vào điểm hồi sinh sau đó (xem `CombatService:_sendToInfirmary`).

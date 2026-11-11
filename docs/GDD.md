@@ -1,8 +1,8 @@
 # Equal Social — Game Design Document
 
-Phiên bản tài liệu: 0.3 (khớp bản v0.3: MVP + trường học, đánh quái, bảng xếp hạng + AURA) · Tên game tạm: **Equal Social** · AI cai quản: **AURA**
+Phiên bản tài liệu: 0.4 (khớp bản v0.4: MVP + trường học, đánh quái, bảng xếp hạng + AURA + PvP và Season) · Tên game tạm: **Equal Social** · AI cai quản: **AURA**
 
-> Mọi con số trong tài liệu này là giá trị trong `src/shared/Config.luau`. Khi đổi số liệu, sửa Config **và** cập nhật bảng ở đây. Mục 4 (v0.1), 6 (v0.2) và 7 (v0.3) **đã được cài đặt**; mục 8 (v0.4) là **bản nháp thiết kế**, chưa được cài đặt.
+> Mọi con số trong tài liệu này là giá trị trong `src/shared/Config.luau`. Khi đổi số liệu, sửa Config **và** cập nhật bảng ở đây. Mục 4 (v0.1), 6 (v0.2), 7 (v0.3) và 8.0–8.2 (v0.4) **đã được cài đặt**; 8.3 (monetization) là bản nháp.
 
 ## 1. Tầm nhìn
 
@@ -116,13 +116,27 @@ Không có bệnh tật, không mất kỹ năng, không mất đồ.
 
 ### 4.7 Trạm miễn phí
 
-| Trạm | Hiệu ứng | Giữ phím |
-| --- | --- | --- |
-| Tắm | Sạch sẽ +40 | 3 giây |
-| Giường | Năng lượng +40, Căng thẳng −10 | 5 giây |
-| Ghế công viên | Căng thẳng −6, Hạnh phúc +4 | 3 giây |
+| Trạm | Hiệu ứng | Giữ phím | Cooldown mỗi người |
+| --- | --- | --- | --- |
+| Tắm | Sạch sẽ +40 | 3 giây | 2 phút |
+| Giường | Năng lượng +40, Căng thẳng −10 | 5 giây | 3 phút |
+| Ghế công viên | Căng thẳng −6, Hạnh phúc +4 | 3 giây | 45 giây |
 
 (Thời gian giữ phím không có trong đề bài gốc; đây là giá trị đề xuất, có trong Config.)
+
+**Cooldown mỗi người** (thêm ở bản cân bằng sau v0.3, `Config.Stations[id].Cooldown`): sau khi dùng một trạm, chính người đó phải chờ bấy nhiêu giây mới dùng lại được trạm cùng loại. Mốc thời gian lưu trong dữ liệu người chơi (`StationUsed`, `os.time()`), nên thoát ra vào lại hay đổi server không reset. Bắt đầu giữ phím khi còn cooldown ⇒ toast báo thời gian còn lại, không có tác dụng.
+
+Hệ quả: tốc độ giảm Căng thẳng tối đa ≈ 11,8 điểm/phút (Ghế 8 + Giường 3,3 + tự giảm 0,5) và hồi Năng lượng miễn phí ≈ 13,3 điểm/phút. Căng thẳng là giới hạn chính: số lượt làm tối đa ≈ 11,8 / (Căng thẳng mỗi lượt) mỗi phút. Năng lượng có thể mua thêm bằng Nước suối ($1 / điểm), là một khoản hút tiền tự nguyện.
+
+| Nguồn thu (Lv0) | Lượt/phút tối đa | Thu nhập ≈ /giờ |
+| --- | --- | --- |
+| Bốc vác (Căng thẳng +3) | ≈ 3,9 | ≈ $2.300 (sau tiền nước) |
+| Pha chế (+4) | ≈ 3 | ≈ $1.800 |
+| Kỹ thuật viên (+4) | ≈ 3 | ≈ $3.500 (sau tiền nước) |
+| Quản lý (+6) | ≈ 2 | ≈ $4.000 |
+| Slime Kẹo (+5) / Gấu Bông (+14) | ≈ 2,4 / 0,85 | ≈ $1.700 / $2.500 |
+
+Trước khi có cooldown, Quản lý Lv0 kiếm ≈ $15.000–17.000/giờ. Ở Lv20 lương ×3 nên Quản lý ≈ $12.000/giờ.
 
 ### 4.8 Cửa hàng
 
@@ -158,7 +172,7 @@ Mở bằng ProximityPrompt (nhấn E, không cần giữ). Mua qua RemoteFuncti
 ### 4.11 Phân tích cân bằng MVP (nhận định, chưa kiểm chứng bằng playtest)
 
 - Thu nhập lý thuyết tối đa ở kho hàng Lv0: một lượt tối thiểu ≈ 3,4 giây (cooldown) ⇒ ≤ 17 lượt/phút ≈ $200/phút nếu bỏ qua di chuyển và nhu cầu. Thực tế bị chặn bởi Năng lượng: một thanh đầy cho 15 lượt (≈ $180) trước khi xuống dưới 15.
-- Giường hồi 40 Năng lượng chỉ trong 5 giây, miễn phí ⇒ gần như xoá giới hạn năng lượng. Giới hạn thực sự còn lại là Độ no (cần mua đồ ăn, rất rẻ so với lương) và khoảng cách đi lại. Hệ quả: **$600 cho Đồng hồ vàng có thể đạt trong vài phút**. Chấp nhận được cho MVP (phản hồi nhanh), nhưng cần cân lại khi có hút tiền của AURA (v0.3) hoặc thêm thời gian/chi phí cho trạm (xem câu hỏi mở).
+- *(Đã xử lý bằng cooldown trạm, xem 4.7.)* Giường hồi 40 Năng lượng chỉ trong 5 giây, miễn phí ⇒ gần như xoá giới hạn năng lượng. Giới hạn thực sự còn lại là Độ no (cần mua đồ ăn, rất rẻ so với lương) và khoảng cách đi lại. Hệ quả: **$600 cho Đồng hồ vàng có thể đạt trong vài phút**. Chấp nhận được cho MVP (phản hồi nhanh), nhưng cần cân lại khi có hút tiền của AURA (v0.3) hoặc thêm thời gian/chi phí cho trạm (xem câu hỏi mở).
 
 ## 5. Phạm vi MVP
 
@@ -168,7 +182,9 @@ Có thêm trong v0.2 (xem mục 6): lịch trong game, 2 kỹ năng mới (Trí 
 
 Có thêm trong v0.3 (xem mục 7): Trụ sở AURA, tài sản thuê (nhà, xe), phí duy trì và thu hồi, thuế lũy tiến, sự kiện ngẫu nhiên, đấu giá tài sản hiếm, bộ điều chỉnh lạm phát và Báo cáo AURA.
 
-Chưa có: PvP, Season, cosmetic bán bằng Robux, tương tác trực tiếp giữa người chơi (trao đổi, chat bubble tùy biến...).
+Có thêm trong v0.4 (xem mục 8): Đấu trường 1v1 có luật và điểm Elo, Season (về vạch xuất phát, lịch sử, danh hiệu).
+
+Chưa có: cosmetic bán bằng Robux, tương tác trực tiếp giữa người chơi (trao đổi, chat bubble tùy biến...).
 
 ## 6. v0.2 — Học tập, đánh quái, bảng xếp hạng (đã triển khai)
 
@@ -278,7 +294,7 @@ Nghề chưa mở khóa vẫn hiện trên map kèm "(cần …)"; làm thử s�
 - **Quái ngang nghề về tiền/giây nhưng rủi ro hơn.** Slime ≈ $12 trong ≈ 3 giây, Gấu ≈ $50 trong ≈ 12 giây (≈ $4/giây) so với Bốc vác Lv0 $3/giây, đổi lại tốn Năng lượng gấp đôi, tăng Căng thẳng mạnh và bị đánh. Thực tế bị chặn bởi Năng lượng (Gấu −20/lần).
 - **Trần $5.000/giờ** chạm sau khoảng 25 phút cày Gấu liên tục. Nghề không có trần nên trần này chỉ ngăn quái trở thành nguồn thu *vô hạn*, không ngăn người chơi cày nghề.
 - **Người chơi mạnh làm quái mất ý nghĩa:** thưởng cố định trong khi Lv20 hạ Slime bằng 1 đòn. Cần quái mạnh hơn cho giai đoạn sau.
-- **Trạm miễn phí vẫn quá mạnh** (câu hỏi mở số 1): Giường hồi 40 Năng lượng trong 5 giây vẫn cho phép cày quái và học liên tục.
+- *(Đã xử lý bằng cooldown trạm, xem 4.7.)* **Trạm miễn phí vẫn quá mạnh** (câu hỏi mở số 1): Giường hồi 40 Năng lượng trong 5 giây vẫn cho phép cày quái và học liên tục.
 
 ### 6.8 Hạn chế đã biết của v0.2
 
@@ -373,29 +389,64 @@ Bốc thăm theo trọng số, mỗi lúc một sự kiện, công khai (toast t
 
 ### 7.7 Phân tích và hạn chế của v0.3
 
-- **Hút tiền còn yếu so với thu nhập tối ưu.** Trạm miễn phí không cooldown (câu hỏi mở 1) cho phép Quản lý Lv0 kiếm ≈ $17.000/giờ; giữ cả 4 tài sản thường chỉ tốn $708/giờ, thuế ở mốc $20.000 là $300/giờ. Bộ điều chỉnh có thể thường xuyên chạm trần 2,0.
+- **Hút tiền so với thu nhập.** Trước bản cân bằng, trạm không cooldown cho phép Quản lý Lv0 kiếm ≈ $17.000/giờ. Sau khi có cooldown trạm (4.7), thu nhập tối ưu Lv0 còn ≈ $1.700–4.000/giờ; giữ cả 4 tài sản thường tốn $708/giờ và thuế ở mốc $20.000 là $300/giờ, tức các khoản hút tiền chiếm ≈ 20–40% thu nhập. Ở level cao (lương ×3) tỷ lệ này giảm, bộ điều chỉnh lạm phát sẽ tăng hệ số. Mục tiêu $5.000 giữ nguyên, cần số liệu thật để chỉnh.
 - Tài sản hiếm của người bỏ game không bị thu hồi (vì không tính phí ngoại tuyến) cho tới khi có Season.
 - Mỗi server có hệ số chính sách riêng.
 - Registry DataStore và lưu/tải thật chưa được kiểm chứng (cần publish place); logic đã kiểm thử bằng DataStore giả và registry cục bộ trong Studio.
 - Số chu kỳ hiển thị là số tuyệt đối tính từ giờ server (rất lớn).
 
-## 8. v0.4 — PvP có luật và Season (bản nháp)
+## 8. v0.4 — PvP có luật và Season (đã triển khai)
 
-### 8.1 PvP có luật
+Số liệu ở `Config.Pvp`, `Config.Season`. Code: `PvpService`, `SeasonService`, `Util/Season`; client: dòng Mùa và dòng Đấu trường trên HUD, phím F / nút "Đánh".
 
-- **Đấu trường** có hàng chờ, các thể thức 1v1 và đội nhỏ, luật rõ ràng (thời gian, vật phẩm cho phép, vùng thi đấu), trọng tài là AURA. Phong cách hoạt hình, không máu me.
-- **Xếp hạng**: điểm kỹ năng đấu (kiểu Elo) theo mùa. Chỉ số Sức mạnh/Năng lượng ảnh hưởng nhẹ để skill có ý nghĩa nhưng **không** quyết định tất cả (đề xuất: cân bằng để kỹ năng điều khiển quan trọng hơn chênh lệch chỉ số).
-- **Vé vào cửa và quỹ giải thưởng**: người chơi đóng một khoản tiền trong game; AURA giữ lại một phần (hút tiền), phần còn lại chia cho người thắng.
-- **Cá cược**: khán giả có thể đặt tiền *trong game* vào kết quả trận. Ràng buộc: chỉ dùng tiền trong game (không bao giờ liên quan đến Robux, không quy đổi ra tiền thật), theo kiểu quỹ chung tỉ lệ (không phải máy quay ngẫu nhiên), giới hạn mức đặt, và **bắt buộc rà soát chính sách Roblox về nội dung giống cờ bạc và điều chỉnh độ tuổi/giới hạn trước khi làm**. Nếu rủi ro chính sách cao, bỏ tính năng này.
+### 8.0 Rà soát chính sách: bỏ cá cược
+
+[Roblox Community Standards](https://about.roblox.com/community-standards) **cấm cả cờ bạc mô phỏng lẫn cờ bạc thật**, và không cho trao đổi tiền thật, Robux hay vật phẩm có giá trị trong game liên quan tới cờ bạc. Theo thông báo năm 2023 (được trích trên diễn đàn dev), "đặt cược mô phỏng" không còn được phép, kể cả ở trải nghiệm 17+. Vì vậy:
+
+- **Bỏ cá cược của khán giả** (bản nháp 8.1 cũ).
+- **Bỏ vé vào cửa có quỹ thưởng chia cho người thắng**: đây cũng là đặt tiền vào kết quả trận.
+- PvP chỉ thưởng **điểm xếp hạng, XP và danh hiệu**, không có tiền.
+
+### 8.1 Đấu trường 1v1
+
+- **Vị trí** (map placeholder): sàn đấu tâm (0, −125), hai bục cách tâm 14 studs theo trục X, quầy hàng chờ ở (0, −89). Map thật: gắn tag `ES_Arena` cho quầy và `ES_ArenaPad` + `PadIndex` = 1/2 cho hai bục; tâm đấu trường = trung điểm hai bục.
+- **Hàng chờ:** nhấn E ở quầy để vào, nhấn lần nữa để rời. Cần ≥ 20 Năng lượng. Ghép cặp theo thứ tự vào hàng chờ (mỗi giây).
+- **Trận:** dịch chuyển lên hai bục, đếm ngược 3 giây, đánh 60 giây. **Máu PvP riêng** (100), không đụng tới máu nhân vật: thua không chết, không mất tiền.
+- **Tấn công:** phím F hoặc nút "Đánh" (điện thoại / tay cầm). Server tự biết mục tiêu là đối thủ, kiểm tra nhịp 1 đòn/giây, tầm 10 studs (+2 dung sai) và rate-limit 12 lần/5 giây.
+- **Sát thương** = round(10 × (1 + 0,03 × level Sức mạnh)): Lv0 = 10, Lv20 = 16. Chỉ số ảnh hưởng nhẹ; giữ khoảng cách và đánh đúng nhịp quan trọng hơn.
+
+| Kết thúc | Kết quả |
+| --- | --- |
+| Hết máu | người còn máu thắng |
+| Hết 60 giây | nhiều máu hơn thắng; bằng nhau thì hòa |
+| Ra khỏi vùng đấu (cách tâm > 34 studs) | người ra thua |
+| Thoát game, nhân vật chết, mất nhân vật | người đó thua (thoát game vẫn bị tính thua và được lưu) |
+
+- **Điểm Elo theo mùa:** bắt đầu 1000, K = 32 (ngang điểm: thắng +16, thua −16, hòa 0).
+- **Sau trận** (cả hai): Năng lượng −10, Độ no −5, Căng thẳng +8; XP Sức mạnh: thắng 20, hòa 12, thua 8. Hai người được đưa về cạnh quầy sau 2 giây.
+- **Chưa làm:** thể thức đội nhỏ, ghép cặp theo điểm, khán đài / xem trận.
 
 ### 8.2 Season
 
-- Mỗi **mùa kéo dài 4–8 tuần**. Hết mùa, mọi người **quay về vạch xuất phát**:
-  - **Reset**: tiền (về $100), chỉ số, kỹ năng, mọi tài sản thuê từ AURA, đồ mua bằng tiền game.
-  - **Giữ lại**: cosmetic (kể cả mua bằng Robux), **danh hiệu** theo thành tích mùa, huy hiệu, và **bảng xếp hạng lịch sử** (hạng cuối mùa, tài sản ròng đỉnh, hạng PvP).
-- Khuyến khích quay lại: phần thưởng cuối mùa (danh hiệu, cosmetic giới hạn), thông báo đếm ngược, "đêm chung kết" với công bố kết quả.
-- Dữ liệu tách hai tầng: `Persistent` (cosmetic, danh hiệu, lịch sử) và `Season` (tiền, chỉ số, kỹ năng, tài sản). Khi vào game, nếu `Season.Id` khác mùa hiện tại thì lưu hồ sơ mùa cũ vào lịch sử, rồi dựng lại `Season` từ template. Dùng `SchemaVersion` + migration để làm việc này an toàn.
-- Người chơi vào giữa mùa vẫn xuất phát bằng template chuẩn; nên có cơ chế "bắt kịp" nhẹ để họ không bị bỏ xa (xem câu hỏi mở).
+- `Config.Season`: `Id = 1`, tên "Mùa 1", `EndsAt` = 06/01/2027 00:00 (giờ Việt Nam), 8 tuần. `EndsAt` **chỉ để đếm ngược** trên HUD; mùa chỉ đổi khi tăng `Id` (rồi publish).
+- **Sang mùa:** khi người chơi vào game với `SeasonId` khác mùa hiện tại, `DataService` (qua `Util/Season.Rollover`) làm **trước khi báo cho service khác**:
+  1. Lưu hồ sơ mùa cũ vào `History`: tiền, tài sản ròng cao nhất, điểm và số trận PvP, danh hiệu. Giữ tối đa 20 mùa.
+  2. Trao danh hiệu theo `TitleRules` (dạng "Đấu sĩ · Mùa 1").
+  3. **Quay về vạch xuất phát:** mọi trường trừ `SchemaVersion`, `SeasonId`, `History`, `Titles` lấy lại từ template (tiền $100, chỉ số, kỹ năng, đồ cửa hàng, tài sản thuê, cooldown trạm, PvP, tiền khóa đấu giá).
+- Tiền khóa đấu giá mùa cũ **bị bỏ**, không hoàn sang mùa mới.
+- Bảng xếp hạng (`EqualSocial_NetWorth_S<Id>`) và registry tài sản hiếm (`EqualSocial_AssetRegistry_S<Id>`) có hậu tố theo `Id`, nên mùa mới tự dùng store mới.
+- Dữ liệu trước v0.4 (không có `SeasonId`) được reconcile thành mùa hiện tại, **không bị reset**.
+- Tài sản ròng cao nhất (`PeakNetWorth`) được cập nhật mỗi lần tính tài sản ròng (mỗi snapshot).
+
+| Danh hiệu | Điều kiện cuối mùa |
+| --- | --- |
+| Nhà vô địch đấu trường | điểm PvP ≥ 1300 và ≥ 10 trận |
+| Đấu sĩ | điểm PvP ≥ 1150 và ≥ 5 trận |
+| Đại gia | tài sản ròng cao nhất ≥ $50.000 |
+| Người có của | tài sản ròng cao nhất ≥ $10.000 |
+
+- HUD: "Mùa 1 · còn 55 ngày · PvP 1000 điểm" và danh hiệu mới nhất. Sang mùa có toast chào mùa mới và toast cho từng danh hiệu.
+- **Chưa làm:** cơ chế "bắt kịp" cho người vào giữa mùa, đêm chung kết, phần thưởng cosmetic cuối mùa, xem lịch sử các mùa trong UI.
 
 ### 8.3 Monetization (cosmetic-only)
 
@@ -413,7 +464,7 @@ Bốc thăm theo trọng số, mỗi lúc một sự kiện, công khai (toast t
 
 ## 10. Câu hỏi thiết kế còn mở
 
-1. **Trạm miễn phí quá mạnh?** Giường hồi 40 Năng lượng chỉ trong 5 giây, không phí. Có nên thêm cooldown riêng cho từng trạm, giới hạn số lần/giờ, hay thời gian ngủ dài hơn?
+1. **Trạm miễn phí quá mạnh?** *(Đã chốt: cooldown riêng mỗi người cho từng trạm, xem 4.7.)* Còn mở: có nên thêm trạm trả phí (khách sạn, spa) cho người muốn hồi nhanh hơn, như một khoản hút tiền?
 2. **Nhịp thời gian.** Chỉ số tụt hết trong 35–70 phút thực. Với người chơi phiên ngắn (10–15 phút), chỉ số hầu như không đổi. Có cần "thời gian trôi nhanh hơn" hoặc tách thời gian ngoại tuyến?
 3. **Chỉ số khi ngoại tuyến.** MVP lưu nguyên chỉ số lúc rời game. Có nên tụt nhẹ theo thời gian vắng mặt (và giới hạn mức tụt) để tránh bỏ game sạch nhưng vẫn không quá phạt?
 4. **Xuất phát thật sự công bằng?** Level kỹ năng bắt đầu 0 ở mọi người. Người chơi vào giữa mùa cần bắt kịp thế nào mà không phá cảm giác công bằng (đường tắt học nhanh, thưởng "người mới")?
@@ -423,7 +474,7 @@ Bốc thăm theo trọng số, mỗi lúc một sự kiện, công khai (toast t
 8. **Nổi tiếng và đồ thuê.** Với v0.3, nhà/xe thuê có cộng Nổi tiếng không? Nếu đồ thuê bị thu hồi thì Nổi tiếng giảm lại, có gây cảm giác bị phạt quá nặng không?
 9. **Cơ chế thu hồi.** Ân hạn bao lâu là hợp lý? Có cho "cứu" bằng khoản vay từ AURA (có lãi) hay không?
 10. **Thuế tính trên gì.** Tài sản ròng (khuyến khích chi tiêu) hay thu nhập (khuyến khích tích lũy)? Người chơi cố ý "giấu" tài sản bằng cách mua đồ sở hữu vĩnh viễn thì xử lý ra sao?
-11. **Cá cược PvP.** Có đáng làm không so với rủi ro chính sách? Có phương án thay thế (cược bằng điểm danh vọng không có giá trị kinh tế)?
+11. **Cá cược PvP.** *(Đã chốt: bỏ, Roblox cấm cờ bạc mô phỏng, xem 8.0.)* Còn mở: khán giả có thể "cổ vũ" hay dự đoán kết quả không có giá trị kinh tế không, hay cũng nên tránh?
 12. **Độ dài mùa.** 4 tuần hay 8 tuần? Có nên linh hoạt theo hoạt động của người chơi? Cách thông báo và kết thúc mùa để không gây hụt hẫng.
 13. **Chống đa tài khoản / farm.** Cần cơ chế gì để một người dùng nhiều tài khoản chuyển tiền cho tài khoản chính? (MVP chưa có chuyển tiền; khi thêm thương mại/đấu giá phải giải quyết.)
 14. **Đánh quái và PvP: chỉ số hay kỹ năng điều khiển?** Mức ảnh hưởng của chỉ số nên là bao nhiêu để người chơi mới vẫn có cơ hội thắng?
@@ -439,4 +490,4 @@ Bốc thăm theo trọng số, mỗi lúc một sự kiện, công khai (toast t
 24. **Tài sản có công dụng không?** Nhà/xe v0.3 chỉ cho Nổi tiếng và tài sản ròng. Có nên thêm công dụng (giường riêng, đi nhanh hơn) mà không tạo lợi thế kiếm tiền quá lớn?
 25. **Phí ngoại tuyến và tài sản hiếm bị bỏ quên.** Không tính phí ngoại tuyến nên người bỏ game giữ tài sản hiếm mãi. Có cần cơ chế thu hồi sau X ngày vắng mặt trước khi có Season?
 26. **AURA theo từng server.** Hệ số chính sách khác nhau giữa server. Có cần đồng bộ (MessagingService / MemoryStore)?
-27. **Mục tiêu tiền trung bình $5.000** có phù hợp khi thu nhập tối ưu hiện rất cao (xem 7.7)?
+27. **Mục tiêu tiền trung bình $5.000** có phù hợp không? Sau cooldown trạm thu nhập Lv0 ≈ $1.700–4.000/giờ (xem 4.7, 7.7); cần số liệu từ người chơi thật để chỉnh.

@@ -1,0 +1,46 @@
+# Kiểm tra tự động cho mỗi push / pull request: định dạng, lint, type-check strict và build place.
+# Công cụ cài đúng phiên bản trong rokit.toml.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cài Rokit và công cụ (rokit.toml)
+        env:
+          GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -sSf https://raw.githubusercontent.com/rojo-rbx/rokit/main/scripts/install.sh | bash
+          echo "$HOME/.rokit/bin" >> "$GITHUB_PATH"
+          "$HOME/.rokit/bin/rokit" install --no-trust-check
+
+      - name: StyLua (định dạng)
+        run: stylua --check src
+
+      - name: Selene (lint)
+        run: |
+          selene generate-roblox-std
+          selene src
+
+      - name: luau-lsp (type-check --!strict)
+        run: |
+          # File định nghĩa API Roblox lấy đúng phiên bản luau-lsp trong rokit.toml
+          version=$(grep -oP 'luau-lsp@\K[0-9.]+' rokit.toml)
+          curl -sSfL -o globalTypes.d.luau \
+            "https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/${version}/scripts/globalTypes.d.luau"
+          rojo sourcemap default.project.json -o sourcemap.json
+          luau-lsp analyze --platform=roblox --sourcemap=sourcemap.json \
+            --definitions=globalTypes.d.luau --ignore="**/Vendor/**" src
+
+      - name: Rojo build
+        run: rojo build -o EqualSocial.rbxl

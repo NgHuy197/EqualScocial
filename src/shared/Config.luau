@@ -97,6 +97,8 @@ export type StationDef = {
 	Name: string,
 	ActionText: string,
 	HoldDuration: number,
+	-- Giây phải chờ trước khi CÙNG người chơi dùng lại trạm này (lưu trong dữ liệu, đổi server không mất)
+	Cooldown: number,
 	Effects: { [string]: number },
 	DoneText: string,
 	Color: Color3?,
@@ -426,12 +428,72 @@ local Monsters: { [string]: MonsterDef } = {
 	},
 }
 
+-- ───────────────────────────── Season (v0.4) ─────────────────────────────
+-- Đổi Id (và Name, EndsAt) để bắt đầu mùa mới: ai vào game với dữ liệu mùa cũ sẽ được lưu hồ sơ mùa
+-- vào lịch sử, nhận danh hiệu, rồi QUAY VỀ VẠCH XUẤT PHÁT (tiền, chỉ số, kỹ năng, đồ, tài sản, PvP).
+-- Store bảng xếp hạng và registry tài sản hiếm có hậu tố theo Id nên mùa mới tự dùng store mới.
+
+export type TitleRule = {
+	Name: string, -- tên danh hiệu; khi trao sẽ thành "<Name> · <tên mùa>"
+	MinRating: number?, -- điểm PvP cuối mùa tối thiểu
+	MinPeakNetWorth: number?, -- tài sản ròng cao nhất trong mùa tối thiểu
+	MinMatches: number?, -- số trận PvP tối thiểu
+}
+
+local Season = {
+	Id = 1,
+	Name = "Mùa 1",
+	-- Thời điểm kết thúc dự kiến (Unix, giây) chỉ để hiện đếm ngược; mùa CHỈ đổi khi tăng Id.
+	EndsAt = 1799168400, -- 06/01/2027 00:00 (giờ Việt Nam), 8 tuần
+	-- Các trường KHÔNG bị reset khi sang mùa (còn lại lấy lại từ template)
+	Persistent = { "SchemaVersion", "SeasonId", "History", "Titles" },
+	HistorySize = 20, -- số mùa giữ trong lịch sử
+	TitleRules = {
+		{ Name = "Nhà vô địch đấu trường", MinRating = 1300, MinMatches = 10 },
+		{ Name = "Đấu sĩ", MinRating = 1150, MinMatches = 5 },
+		{ Name = "Đại gia", MinPeakNetWorth = 50000 },
+		{ Name = "Người có của", MinPeakNetWorth = 10000 },
+	} :: { TitleRule },
+	PeakCheckSeconds = 30, -- chu kỳ cập nhật tài sản ròng cao nhất của người chơi online
+}
+
+-- ───────────────────────────── PvP có luật (v0.4) ─────────────────────────────
+-- Đấu 1v1 ở Đấu trường: vào hàng chờ ở quầy (tag Arena), ghép cặp theo thứ tự, đấu bằng máu PvP RIÊNG
+-- (không đụng tới máu nhân vật). KHÔNG có tiền cược, vé có quỹ thưởng hay cá cược: Roblox cấm cờ bạc
+-- mô phỏng. Phần thưởng chỉ là điểm xếp hạng (Elo theo mùa), XP và danh hiệu cuối mùa.
+
+local Pvp = {
+	MaxHP = 100,
+	-- Sát thương = round(BaseDamage * (1 + DamagePerStrengthLevel * level Sức mạnh)): Lv20 chỉ x1,6,
+	-- để chỉ số ảnh hưởng nhẹ, di chuyển giữ khoảng cách vẫn quan trọng.
+	BaseDamage = 10,
+	DamagePerStrengthLevel = 0.03,
+	AttackInterval = 1.0, -- giây giữa hai đòn (server chặn, cho dung sai Prompts.CooldownFactor)
+	AttackRange = 10, -- studs
+	AttackRangeTolerance = 2,
+	CountdownSeconds = 3,
+	MatchSeconds = 60, -- hết giờ: ai còn nhiều máu hơn thắng, bằng nhau thì hòa
+	ZoneRadius = 34, -- ra khỏi vùng đấu (tính từ tâm đấu trường) khi đang đấu = xử thua
+	MinEnergy = 20, -- cần ít nhất ngần này Năng lượng để vào hàng chờ
+	MatchmakeSeconds = 1, -- chu kỳ ghép cặp
+	TickSeconds = 0.25, -- chu kỳ kiểm tra vùng đấu / hết giờ
+	ReturnDelaySeconds = 2, -- sau trận chờ ngần này rồi đưa người chơi về cạnh quầy
+	-- Elo
+	StartRating = 1000,
+	KFactor = 32,
+	-- Phần thưởng/chi phí sau trận (cả hai người)
+	WinXP = 20,
+	LossXP = 8,
+	DrawXP = 12,
+	StatDelta = { Energy = -10, Hunger = -5, Stress = 8 },
+}
+
 -- ───────────────────────────── Bảng xếp hạng ─────────────────────────────
 
 local Leaderboard = {
 	-- Tài sản ròng = tiền + tổng giá các món vĩnh viễn đang sở hữu
-	StoreName = "EqualSocial_NetWorth_S1", -- hậu tố là SeasonId; mùa mới (v0.4) dùng store mới
-	SeasonId = 1,
+	StoreName = "EqualSocial_NetWorth_S" .. Season.Id, -- mỗi mùa một store riêng
+	SeasonId = Season.Id,
 	TopCount = 50, -- số hạng đọc về và hiển thị trong panel
 	RefreshSeconds = 60, -- chu kỳ đọc bảng xếp hạng
 	PublishSeconds = 180, -- chu kỳ ghi tài sản ròng của từng người chơi (và khi rời game)
@@ -565,7 +627,7 @@ local Auction = {
 
 -- Registry toàn cầu cho tài sản hiếm: ai đang giữ cái nào (nhận bằng UpdateAsync nên không bị cấp trùng)
 local AssetRegistry = {
-	StoreName = "EqualSocial_AssetRegistry_S1", -- hậu tố là SeasonId
+	StoreName = "EqualSocial_AssetRegistry_S" .. Season.Id, -- mỗi mùa kho tài sản hiếm mới
 	Key = "registry",
 	CacheSeconds = 30, -- đọc số lượng còn lại tối đa mỗi 30 giây
 }
@@ -577,6 +639,7 @@ local Stations: { [string]: StationDef } = {
 		Name = "Vòi tắm",
 		ActionText = "Tắm",
 		HoldDuration = 3,
+		Cooldown = 120,
 		Effects = { Hygiene = 40 },
 		DoneText = "Bạn vừa tắm xong, thấy sạch sẽ hẳn ra!",
 		Color = Color3.fromRGB(120, 190, 235),
@@ -586,6 +649,7 @@ local Stations: { [string]: StationDef } = {
 		Name = "Giường",
 		ActionText = "Ngủ",
 		HoldDuration = 5,
+		Cooldown = 180,
 		Effects = { Energy = 40, Stress = -10 },
 		DoneText = "Bạn đã ngủ một giấc, người khoan khoái hơn nhiều.",
 		Color = Color3.fromRGB(190, 130, 160),
@@ -595,6 +659,7 @@ local Stations: { [string]: StationDef } = {
 		Name = "Ghế công viên",
 		ActionText = "Ngồi nghỉ",
 		HoldDuration = 3,
+		Cooldown = 45,
 		Effects = { Stress = -6, Happiness = 4 },
 		DoneText = "Ngồi hóng gió một lát, đầu óc nhẹ nhõm hơn.",
 		Color = Color3.fromRGB(110, 150, 95),
@@ -681,6 +746,7 @@ local RateLimits = {
 	AssetLease = { Calls = 4, Window = 5 },
 	AssetReturn = { Calls = 4, Window = 5 },
 	AuctionBid = { Calls = 4, Window = 5 },
+	PvpAttack = { Calls = 12, Window = 5 }, -- RemoteEvent; nhịp đánh thật do Pvp.AttackInterval chặn
 }
 
 local Replication = {
@@ -732,6 +798,10 @@ local World = {
 	InfirmaryDropHeight = 4, -- độ cao nhân vật xuất hiện phía trên Bệnh xá
 	AuraOrigin = Vector3.new(65, 0, 55), -- Trụ sở AURA
 	AuraSize = Vector3.new(18, 12, 14),
+	ArenaOrigin = Vector3.new(0, 0, -125), -- tâm Đấu trường (sau dãy cửa hàng)
+	ArenaFloorSize = 56, -- cạnh sàn đấu
+	ArenaPadOffset = 14, -- hai bục xuất phát cách tâm ngần này studs theo trục X
+	ArenaKioskOffset = Vector3.new(0, 0, 36), -- quầy hàng chờ, tính từ tâm (ngoài vùng đấu)
 	DefaultSize = Vector3.new(12, 8, 12),
 	DefaultColor = Color3.fromRGB(150, 150, 150),
 	LabelMaxDistance = 90,
@@ -785,6 +855,7 @@ local Text = {
 	NotEnoughMoney = "Bạn không đủ tiền.",
 	TooFarFromShop = "Bạn đang đứng quá xa cửa hàng.",
 	TooFarFromAura = "Bạn đang đứng quá xa Trụ sở AURA.",
+	StationCooldown = "%s cần chờ thêm %s nữa mới dùng lại được.",
 	InvalidRequest = "Yêu cầu không hợp lệ.",
 	TooFast = "Bạn thao tác quá nhanh, hãy chậm lại một chút.",
 	NoData = "Dữ liệu của bạn chưa sẵn sàng, vui lòng đợi giây lát.",
@@ -873,6 +944,39 @@ local Text = {
 	HudAuraEvent = "AURA: %s · %s",
 	HudAuraNone = "AURA: không có sự kiện",
 
+	-- Season (v0.4)
+	HudSeason = "%s · còn %s · PvP %d điểm",
+	HudSeasonEnded = "%s đã kết thúc, chờ mùa mới · PvP %d điểm",
+	SeasonDays = "%d ngày",
+	SeasonHours = "%d giờ",
+	SeasonRollover = "Chào mừng tới %s! Mọi người lại xuất phát như nhau. Hồ sơ %s đã được lưu vào lịch sử.",
+	SeasonTitleEarned = "Bạn nhận danh hiệu: %s",
+
+	-- Đấu trường PvP (v0.4)
+	ArenaLabel = "Đấu trường",
+	ArenaPrompt = "Vào / rời hàng chờ",
+	ArenaObject = "Quầy đấu trường",
+	PvpJoined = "Bạn đã vào hàng chờ đấu trường (%d người đang chờ). Nhấn E lần nữa để rời.",
+	PvpLeft = "Bạn đã rời hàng chờ đấu trường.",
+	PvpTooTired = "Cần ít nhất %d Năng lượng để vào đấu trường.",
+	PvpBusy = "Bạn đang trong một trận đấu.",
+	PvpNoArena = "Đấu trường chưa sẵn sàng (thiếu bục xuất phát).",
+	PvpMatchFound = "Gặp %s (%d điểm). Trận bắt đầu sau %d giây!",
+	PvpFight = "Bắt đầu! Nhấn F (hoặc nút Đánh) để tấn công. Ra khỏi sàn đấu là thua.",
+	PvpWin = "Bạn thắng %s (%s). Điểm PvP: %d (%+d).",
+	PvpLoss = "Bạn thua %s (%s). Điểm PvP: %d (%+d).",
+	PvpDraw = "Hòa với %s (%s). Điểm PvP: %d (%+d).",
+	PvpReasons = {
+		ko = "hạ gục",
+		timeout = "hết giờ",
+		zone = "ra khỏi sàn đấu",
+		left = "rời trận",
+	} :: { [string]: string },
+	PvpAttackButton = "Đánh",
+	PvpHudQueue = "Đấu trường: đang chờ ghép cặp",
+	PvpHudCountdown = "Đấu trường: gặp %s, bắt đầu sau %d",
+	PvpHudFight = "Đấu trường: Bạn %d - %d %s · %s · [F] Đánh",
+
 	AuraTitle = "Trụ sở AURA",
 	AuraClose = "Đóng",
 	AuraTabAssets = "Tài sản",
@@ -920,7 +1024,7 @@ local Text = {
 }
 
 local Config = {
-	Version = "0.3.0",
+	Version = "0.4.0",
 	GameName = "Equal Social",
 	AIName = "AURA",
 
@@ -935,6 +1039,8 @@ local Config = {
 		Infirmary = "ES_Infirmary", -- nơi hồi sinh khi thua trận
 		Leaderboard = "ES_Leaderboard", -- bảng xếp hạng 3D (LeaderboardService tự vẽ SurfaceGui)
 		Aura = "ES_Aura", -- Trụ sở AURA (mở cửa sổ tài sản / đấu giá / báo cáo)
+		Arena = "ES_Arena", -- quầy hàng chờ Đấu trường (nhấn E để vào / rời hàng chờ)
+		ArenaPad = "ES_ArenaPad", -- bục xuất phát (attribute PadIndex = 1 hoặc 2); tâm đấu trường = trung điểm
 	},
 	Attributes = {
 		Job = "JobId",
@@ -942,6 +1048,7 @@ local Config = {
 		Shop = "ShopId",
 		Class = "ClassId",
 		Monster = "MonsterId",
+		ArenaPad = "PadIndex",
 	},
 
 	Data = Data,
@@ -956,6 +1063,8 @@ local Config = {
 	Classes = Classes,
 	Combat = Combat,
 	Monsters = Monsters,
+	Season = Season,
+	Pvp = Pvp,
 	Leaderboard = Leaderboard,
 	Assets = Assets,
 	AuraEvents = AuraEvents,
