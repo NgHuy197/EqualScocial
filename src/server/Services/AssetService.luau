@@ -70,6 +70,42 @@ function AssetService:Start()
 			return self:Return(player, id)
 		end)
 	end
+
+	-- Vào game: gửi nhịp cho từng tài sản hiếm; suất đã bị người khác nhận vì vắng mặt lâu => thu hồi
+	services.Data:OnLoaded(function(player: Player)
+		self:VerifyRare(player)
+	end)
+end
+
+-- Gửi nhịp lên registry cho mọi tài sản hiếm người chơi đang giữ (có thể yield). Thu hồi những tài
+-- sản mà registry báo đã bị gỡ (chủ vắng mặt quá Config.AssetRegistry.IdleSeconds và có người nhận).
+-- Registry lỗi thì giữ nguyên, không thu hồi nhầm.
+function AssetService:VerifyRare(player: Player)
+	local data = services.Data:Get(player)
+	if not data then
+		return
+	end
+	for _, assetId in sortedAssetIds(data) do
+		local def = Config.Assets[assetId]
+		if def and def.Stock ~= nil then
+			local result = registry:Touch(assetId, player.UserId)
+			-- Sau khi yield: người chơi có thể đã rời game hoặc đã trả tài sản
+			local current = services.Data:Get(player)
+			if result == "evicted" and current and current.Assets[assetId] then
+				current.Assets[assetId] = nil
+				services.Replication:Notify(
+					player,
+					string.format(
+						Config.Text.AssetIdleRevoked,
+						def.Name,
+						math.floor(Config.AssetRegistry.IdleSeconds / 86400)
+					),
+					"error"
+				)
+				services.Replication:MarkDirty(player)
+			end
+		end
+	end
 end
 
 -- ───────────────────────────── API công khai ─────────────────────────────
@@ -262,6 +298,10 @@ function AssetService:ProcessCycle(player: Player, data: PlayerData)
 		)
 	end
 	services.Replication:MarkDirty(player)
+	-- Nhịp cho tài sản hiếm mỗi chu kỳ (luồng riêng vì gọi DataStore)
+	task.spawn(function()
+		self:VerifyRare(player)
+	end)
 end
 
 -- ───────────────────────────── Nội bộ ─────────────────────────────

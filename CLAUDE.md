@@ -8,7 +8,7 @@ Game Roblox nhiều người chơi, viết bằng Luau + Rojo. **Mọi chữ hi�
 
 Một xã hội giống ngoài đời, nhưng mọi người chơi **xuất phát như nhau**: cùng tiền ($100), cùng chỉ số, không gia thế, không bệnh tật. Người chơi cạnh tranh công bằng bằng cách học skill, làm nghề, luyện tập, đấu với nhau rồi mua tài sản để khoe. Mọi tài sản thuộc sở hữu và do siêu máy tính AI **AURA** cai quản. Lối chơi giống Stardew Valley + The Sims, nhưng đề cao tương tác và cạnh tranh giữa người chơi.
 
-Trạng thái: **v0.4** (MVP v0.1 + trường học, đánh quái, bảng xếp hạng + AURA cai quản + Đấu trường 1v1 và Season; xem GDD mục 4, 6, 7, 8). Cá cược PvP đã bị bỏ vì Roblox cấm cờ bạc mô phỏng (GDD 8.0).
+Trạng thái: **v0.5** (v0.4 + làm ca chung, thu hồi tài sản hiếm khi vắng mặt, bắt kịp giữa mùa, cosmetic Game Pass; xem GDD mục 4, 6, 7, 8). Cá cược PvP đã bị bỏ vì Roblox cấm cờ bạc mô phỏng (GDD 8.0).
 
 ## Lệnh
 
@@ -48,10 +48,10 @@ src/client  → StarterPlayer.StarterPlayerScripts.Client      init.client.luau,
 - `Config.luau`: **toàn bộ** số liệu cân bằng và câu chữ hiển thị (`Config.Text`).
 - `Remotes.luau`: danh sách RemoteEvent/RemoteFunction. Server gọi `Remotes.Init()` một lần; nơi khác dùng `Remotes.Event(name)` / `Remotes.Function(name)`.
 - `Calendar.luau`: lịch trong game thuần tính toán từ giờ server (`workspace:GetServerTimeNow()`), dùng chung server (lớp mở/đóng) và client (HUD).
-- `Services/*` (thứ tự khởi động trong `init.server.luau`): `DataService`, `EconomyService`, `StatsService`, `SkillService`, `JobService`, `StationService`, `ShopService`, `SchoolService`, `CombatService`, `AssetService` (thuê/trả tài sản, phí duy trì, thu hồi), `AuctionService` (đấu giá tài sản hiếm, tiền khóa), `AuraService` (chu kỳ, thuế, sự kiện, lạm phát, Báo cáo), `SeasonService` (thông báo sang mùa, phần Season của snapshot), `PvpService` (hàng chờ, trận 1v1, Elo), `LeaderboardService`, `ReplicationService`. `DataService` có thêm `OnReleasing(cb)` (chạy đồng bộ trước khi dữ liệu người rời game bị gỡ) và `TakeRollover(player)`.
+- `Services/*` (thứ tự khởi động trong `init.server.luau`): `DataService`, `EconomyService`, `StatsService`, `SkillService`, `JobService`, `StationService`, `ShopService`, `SchoolService`, `CombatService`, `AssetService` (thuê/trả tài sản, phí duy trì, thu hồi), `AuctionService` (đấu giá tài sản hiếm, tiền khóa), `AuraService` (chu kỳ, thuế, sự kiện, lạm phát, Báo cáo), `SeasonService` (thông báo sang mùa, phần Season của snapshot), `PvpService` (hàng chờ, trận 1v1, Elo), `CosmeticService` (Game Pass bảng tên màu, gắn danh hiệu, bảng tên trên đầu), `LeaderboardService`, `ReplicationService`. `DataService` có thêm `OnReleasing(cb)` (chạy đồng bộ trước khi dữ liệu người rời game bị gỡ) và `TakeRollover(player)`.
 - `Vendor/ProfileStore`: thư viện ProfileStore (MAD STUDIO, Apache 2.0) giữ **nguyên bản gốc**, không sửa; nguồn và commit ghi trong `SOURCE.txt`. Được loại khỏi StyLua (`.styluaignore`), Selene (`exclude` trong `selene.toml`) và type-check (`--ignore`). Chỉ `DataService` require nó.
-- `Util/*`: `Validate` (kiểm tra dữ liệu/khoảng cách), `RateLimiter`, `Prompts` (gắn ProximityPrompt theo tag có cooldown + kiểm tra khoảng cách phía server), `Describe` (chuỗi mô tả nghề/điều kiện dùng chung), `MonsterModel` (dựng quái và thanh máu), `BoardGui` (vẽ chữ lên bảng xếp hạng 3D), `AssetRegistry` (kho tài sản hiếm toàn cầu trong DataStore, nhận/trả nguyên tử bằng `UpdateAsync`; Studio không API thì dùng bản cục bộ), `Season` (logic thuần sang mùa: lưu lịch sử, trao danh hiệu, reset về template).
-- Client `UI/*`: `Theme`, `HUD`, `Toast`, `ShopWindow`, `LeaderboardWindow`, `AuraWindow` (3 tab Tài sản / Đấu giá / Báo cáo), `ProfileWindow` (Hồ sơ: danh hiệu, lịch sử mùa; mở bằng nút trên HUD hoặc phím P).
+- `Util/*`: `Validate` (kiểm tra dữ liệu/khoảng cách), `RateLimiter`, `Prompts` (gắn ProximityPrompt theo tag có cooldown + kiểm tra khoảng cách phía server), `Describe` (chuỗi mô tả nghề/điều kiện dùng chung), `MonsterModel` (dựng quái và thanh máu), `BoardGui` (vẽ chữ lên bảng xếp hạng 3D), `AssetRegistry` (kho tài sản hiếm toàn cầu trong DataStore, nhận/trả nguyên tử bằng `UpdateAsync`; Studio không API thì dùng bản cục bộ), `Season` (logic thuần sang mùa: lưu lịch sử, trao danh hiệu, reset về template), `NameTag` (dựng BillboardGui bảng tên trên đầu nhân vật; harness thay bằng bản giả).
+- Client `UI/*`: `Theme`, `HUD`, `Toast`, `ShopWindow`, `LeaderboardWindow`, `AuraWindow` (3 tab Tài sản / Đấu giá / Báo cáo), `ProfileWindow` (Hồ sơ: danh hiệu + nút gắn, bảng tên màu + nút mua/dùng, lịch sử mùa, thưởng bắt kịp; mở bằng nút trên HUD hoặc phím P).
 - `WorldBuilder`: dựng map placeholder nếu Workspace chưa có `World`; map thật chỉ cần gắn **tag + attribute** (xem bên dưới).
 
 ## Luật kiến trúc (BẮT BUỘC)
@@ -148,6 +148,14 @@ Chạy trong Studio (Play, hoặc Test → 2 người chơi). Để test nhanh t
 33. **Chống gian lận v0.4**: `PvpAttack:FireServer()` khi không trong trận → không có gì; dồn dập → bị rate-limit, không lỗi. `GetProfile:InvokeServer()` hơn 3 lần/10 giây → các lần vượt trả về `nil`.
 33a. **Ghép cặp theo điểm** (3 người chơi trở lên): chênh lệch lớn chỉ được ghép sau khi chờ đủ lâu (100 + 10 × giây chờ); đang có trận thì người khác tiếp tục chờ, không bị dịch chuyển lên bục.
 33b. **Hồ sơ**: nhấn P hoặc nút "Hồ sơ [P]" → cửa sổ hiện điểm PvP, thắng/thua/hòa, tài sản ròng cao nhất, danh hiệu và các mùa trước; nút Đóng bấm được; mở Hồ sơ thì cửa sổ khác tự đóng.
+
+**Checklist v0.5:**
+
+33c. **Làm ca chung** (Test → 2–3 người chơi): cùng giữ E ở *Bốc vác kho hàng* trong vòng 20 giây → người hoàn thành sau nhận $13 thay vì $12 (Lv0, 1 người làm chung), toast ghi "làm chung với 1 người (+10% lương)"; tối đa +30%. Nghề khác hoặc chỗ làm cách > 40 studs không tính.
+33d. **Bảng tên**: trên đầu nhân vật hiện tên (không còn tên mặc định của Roblox). Gắn danh hiệu trong Hồ sơ → dòng thứ hai hiện danh hiệu; "Gỡ" → mất dòng đó. Hồi sinh vẫn còn bảng tên.
+33e. **Cosmetic**: trong Hồ sơ ba bảng tên màu hiện "Sắp ra mắt" khi `GamePassId = 0`. Đặt ID Game Pass thật (place đã publish) → nút "Mua" mở hộp thoại Roblox; mua xong → toast cảm ơn, nút thành "Dùng"; "Dùng" → bảng tên đổi màu; vào lại vẫn giữ. Cosmetic không đổi Nổi tiếng.
+33f. **Bắt kịp**: đặt tạm `Config.Season.StartsAt` lùi 3 tuần → vào game có toast "+30% XP trong 3 giờ chơi đầu"; một lượt Bốc vác cho 13 XP thay vì 10; Hồ sơ hiện dòng thưởng. Trả `StartsAt` về như cũ.
+33g. **Tài sản hiếm vắng mặt** (cần publish, hoặc kiểm tra bằng harness): chủ không vào game quá 7 ngày và có người khác thắng đấu giá suất đó → khi chủ cũ vào lại, toast "vắng mặt quá 7 ngày", tài sản biến mất.
 
 **Kiểm chứng sau khi publish** (cần bạn: File → Publish to Roblox, bật *Enable Studio Access to API Services*, dùng experience dev):
 

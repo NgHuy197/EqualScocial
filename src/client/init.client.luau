@@ -7,6 +7,7 @@
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
+local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -156,7 +157,30 @@ local function fetchProfile(): Types.ProfileView?
 	return nil
 end
 
-local profileWindow = ProfileWindow.new(screenGui, fetchProfile)
+local equipCosmetic = Remotes.Function("EquipCosmetic")
+local equipTitle = Remotes.Function("EquipTitle")
+local profileWindow: ProfileWindow.ProfileWindow
+profileWindow = ProfileWindow.new(screenGui, {
+	Fetch = fetchProfile,
+	OnEquip = function(id: string)
+		requestAction(equipCosmetic, id)
+		profileWindow:Refetch()
+	end,
+	OnEquipTitle = function(title: string)
+		requestAction(equipTitle, title)
+		profileWindow:Refetch()
+	end,
+	OnBuy = function(gamePassId: number)
+		-- Hộp thoại mua của Roblox; server tự cập nhật quyền sở hữu khi mua xong
+		MarketplaceService:PromptGamePassPurchase(Players.LocalPlayer, gamePassId)
+	end,
+})
+MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, _passId, purchased)
+	if player == Players.LocalPlayer and purchased then
+		task.wait(1) -- chờ server ghi nhận quyền sở hữu
+		profileWindow:Refetch()
+	end
+end)
 
 -- Mở hồ sơ thì đóng các cửa sổ khác (chỉ một cửa sổ mở cùng lúc)
 local function toggleProfile()

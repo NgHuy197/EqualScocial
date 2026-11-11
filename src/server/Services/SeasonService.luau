@@ -8,9 +8,12 @@
 	  * dựng phần Season trong snapshot (tên mùa, đếm ngược, thành tích PvP, danh hiệu mới nhất);
 	  * trả lời GetProfile: hồ sơ của CHÍNH người gọi (danh hiệu, lịch sử mùa). Không có tham số nên
 	    không cần kiểm tra kiểu; không gắn với vật thể trong map nên không kiểm tra khoảng cách.
+	  * bắt kịp: ghi lúc người chơi vào mùa (SeasonJoinedAt) và cộng thời gian chơi; vào muộn so với
+	    Config.Season.StartsAt thì được nhân XP (GetXPMultiplier) trong vài giờ chơi đầu.
 	Mùa CHỈ đổi khi tăng Config.Season.Id; EndsAt chỉ để hiện đếm ngược.
 ]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -51,7 +54,37 @@ function SeasonService:Start()
 		return view
 	end
 
-	services.Data:OnLoaded(function(player: Player)
+	-- Cộng thời gian chơi trong mùa cho người chơi online
+	task.spawn(function()
+		local tick = Config.Season.CatchUp.PlayTickSeconds
+		while true do
+			task.wait(tick)
+			for _, player in Players:GetPlayers() do
+				local data = services.Data:Get(player)
+				if data then
+					data.SeasonPlaySeconds += tick
+				end
+			end
+		end
+	end)
+
+	services.Data:OnLoaded(function(player: Player, data: PlayerData)
+		-- Lần đầu vào game trong mùa này (kể cả ngay sau khi sang mùa): ghi mốc vào mùa
+		if data.SeasonJoinedAt == 0 then
+			data.SeasonJoinedAt = os.time()
+		end
+		local boost = self:GetCatchUpBoost(data)
+		if boost > 0 and self:GetBoostSecondsLeft(data) > 0 then
+			services.Replication:Notify(
+				player,
+				string.format(
+					Config.Text.CatchUpNotice,
+					math.floor(boost * 100 + 0.5),
+					Config.Season.CatchUp.PlayHours
+				),
+				"info"
+			)
+		end
 		local record = services.Data:TakeRollover(player)
 		if not record then
 			return
@@ -71,6 +104,31 @@ function SeasonService:Start()
 	end)
 end
 
+-- Thưởng XP bắt kịp theo số tuần vào mùa muộn (0 nếu vào đúng lúc hoặc chưa ghi mốc)
+function SeasonService:GetCatchUpBoost(data: PlayerData): number
+	local catchUp = Config.Season.CatchUp
+	if data.SeasonJoinedAt <= 0 then
+		return 0
+	end
+	local weeksLate =
+		math.floor(math.max(0, data.SeasonJoinedAt - Config.Season.StartsAt) / (7 * 86400))
+	return math.min(catchUp.MaxBoost, catchUp.BoostPerWeek * weeksLate)
+end
+
+-- Số giây chơi còn được hưởng thưởng bắt kịp
+function SeasonService:GetBoostSecondsLeft(data: PlayerData): number
+	return math.max(0, Config.Season.CatchUp.PlayHours * 3600 - data.SeasonPlaySeconds)
+end
+
+-- Hệ số nhân XP hiện tại của người chơi (1 = không thưởng)
+function SeasonService:GetXPMultiplier(player: Player): number
+	local data = services.Data:Get(player)
+	if not data or self:GetBoostSecondsLeft(data) <= 0 then
+		return 1
+	end
+	return 1 + self:GetCatchUpBoost(data)
+end
+
 -- Hồ sơ đầy đủ của người chơi (bản sao, không đưa bảng dữ liệu thật ra ngoài)
 function SeasonService:GetProfile(player: Player): Types.ProfileView?
 	local data = services.Data:Get(player)
@@ -87,6 +145,10 @@ function SeasonService:GetProfile(player: Player): Types.ProfileView?
 		PeakNetWorth = data.PeakNetWorth,
 		Titles = table.clone(data.Titles),
 		History = history,
+		XPBoost = if self:GetBoostSecondsLeft(data) > 0 then self:GetCatchUpBoost(data) else 0,
+		BoostSecondsLeft = self:GetBoostSecondsLeft(data),
+		Cosmetics = services.Cosmetics:GetViews(player),
+		EquippedTitle = data.Cosmetics.Title,
 	}
 end
 
