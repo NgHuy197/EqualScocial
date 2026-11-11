@@ -2,7 +2,7 @@
 
 Game Roblox nhiều người chơi: một xã hội mà **mọi người xuất phát như nhau** (cùng tiền, cùng chỉ số, không gia thế, không bệnh tật) và cạnh tranh công bằng bằng cách học skill, làm nghề, luyện tập, rồi mua tài sản để khoe. Mọi tài sản thuộc về siêu máy tính AI **AURA**. Lối chơi giống Stardew Valley + The Sims nhưng đề cao tương tác và cạnh tranh giữa người chơi.
 
-Trạng thái: **v0.4** (MVP v0.1 + trường học, đánh quái, bảng xếp hạng + AURA cai quản tài sản + Đấu trường 1v1 và Season). Chữ hiển thị trong game là tiếng Việt.
+Trạng thái: **v0.5** (v0.4 + làm ca chung, thu hồi tài sản hiếm khi vắng mặt, bắt kịp giữa mùa, cosmetic Game Pass). Chữ hiển thị trong game là tiếng Việt.
 
 Tài liệu: [docs/GDD.md](docs/GDD.md) (thiết kế, công thức, lộ trình) · [CLAUDE.md](CLAUDE.md) (luật kiến trúc, checklist test cho người và Claude Code).
 
@@ -36,6 +36,12 @@ Tài liệu: [docs/GDD.md](docs/GDD.md) (thiết kế, công thức, lộ trình
 - **Đấu trường 1v1**: hàng chờ ở quầy, máu PvP riêng (không chết, không mất tiền), phím F / nút "Đánh", luật hết giờ / ra khỏi sàn / thoát game, điểm Elo theo mùa. **Không có cá cược hay quỹ thưởng** (Roblox cấm cờ bạc mô phỏng).
 - **Season**: tăng `Config.Season.Id` để bắt đầu mùa mới, mọi người về vạch xuất phát; hồ sơ mùa cũ lưu vào lịch sử, danh hiệu theo thành tích; HUD đếm ngược tới cuối mùa.
 - **Ghép cặp theo điểm** (khoảng chênh nới dần theo thời gian chờ, mỗi lúc một trận) và **cửa sổ Hồ sơ** (phím P): danh hiệu, lịch sử các mùa, thành tích PvP.
+
+**v0.5**
+- **Làm ca chung**: làm cùng nghề, cạnh nhau, trong 20 giây → +10% lương mỗi người làm chung (tối đa +30%).
+- **Thu hồi tài sản hiếm** của chủ vắng mặt quá 7 ngày khi có người khác nhận suất.
+- **Bắt kịp giữa mùa**: vào muộn mỗi tuần +10% XP (tối đa +50%) trong 3 giờ chơi đầu; không thưởng tiền.
+- **Cosmetic**: bảng tên trên đầu nhân vật, gắn danh hiệu miễn phí, bảng tên màu bán bằng Game Pass (điền ID pass vào `Config.Cosmetics`; chỉ trang trí, không cho lợi thế).
 
 ## Cài đặt từng bước
 
@@ -106,7 +112,7 @@ Checklist test đầy đủ ở [CLAUDE.md](CLAUDE.md#checklist-test-thủ-công
 default.project.json   rokit.toml   selene.toml   stylua.toml
 src/
   shared/   Config.luau (mọi số liệu + chữ), Remotes, Format, Types, Calendar
-  server/   init.server.luau, WorldBuilder.luau, Services/ (16 service), Util/
+  server/   init.server.luau, WorldBuilder.luau, Services/ (17 service), Util/
   client/   init.client.luau, UI/ (Theme, HUD, Toast, ShopWindow, LeaderboardWindow, AuraWindow)
 docs/GDD.md
 ```

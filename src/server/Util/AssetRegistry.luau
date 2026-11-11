@@ -2,9 +2,14 @@
 --[[
 	AssetRegistry.luau — registry TOÀN CẦU cho tài sản hiếm (Config.Assets[id].Stock).
 
-	Một tài liệu duy nhất trong DataStore: { [assetId] = { [userId] = true } }. Số khoá của mỗi assetId
-	là số tài sản đã bị giữ. Nhận / trả đều qua UpdateAsync nên hai server cùng nhận một lúc cũng
-	không thể vượt kho.
+	Một tài liệu duy nhất trong DataStore: { [assetId] = { [userId] = thời điểm nhịp gần nhất (os.time) } }.
+	Nhận / trả / nhịp đều qua UpdateAsync nên hai server cùng nhận một lúc cũng không thể vượt kho.
+
+	Chủ vắng mặt: chủ đang online gửi "nhịp" (Touch) mỗi chu kỳ AURA và lúc vào game. Chủ không có nhịp
+	quá Config.AssetRegistry.IdleSeconds thì KHÔNG được tính là đang giữ (Count / Remaining bỏ qua),
+	và bị gỡ khỏi registry khi có người nhận suất đó (TryClaim). Khi người đó quay lại, Touch trả về
+	"evicted" để AssetService thu hồi tài sản trong dữ liệu của họ. Giá trị cũ `true` (trước khi có
+	nhịp) được coi là đang hoạt động.
 
 	Studio không có DataStore (place chưa publish): dùng registry CỤC BỘ trong server (chỉ để test).
 	Server thật mà DataStore lỗi: từ chối (không bao giờ tự rơi về registry cục bộ, vì sẽ cấp trùng
@@ -19,7 +24,7 @@ local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 
-type Doc = { [string]: { [string]: boolean } }
+type Doc = { [string]: { [string]: any } } -- userId -> os.time() nhịp gần nhất (hoặc true: dữ liệu cũ)
 
 type Fields = {
 	Store: DataStore?,
@@ -43,11 +48,22 @@ local function deepCopyDoc(doc: Doc): Doc
 	return copy
 end
 
-local function countHolders(holders: { [string]: boolean }?): number
-	local source: { [string]: boolean } = holders or {}
+-- Chủ còn được tính là đang giữ: có nhịp trong IdleSeconds gần đây (giá trị cũ `true` luôn tính)
+local function isActive(value: any, now: number): boolean
+	if type(value) == "number" then
+		return now - value <= Config.AssetRegistry.IdleSeconds
+	end
+	return value ~= nil
+end
+
+-- Số chủ đang hoạt động
+local function countHolders(holders: { [string]: any }?, now: number): number
+	local source: { [string]: any } = holders or {}
 	local count = 0
-	for _ in source do
-		count += 1
+	for _, value in source do
+		if isActive(value, now) then
+			count += 1
+		end
 	end
 	return count
 end
@@ -129,7 +145,7 @@ function AssetRegistry.Count(self: AssetRegistry, assetId: string): number?
 	if not doc then
 		return nil
 	end
-	return countHolders(doc[assetId])
+	return countHolders(doc[assetId], os.time())
 end
 
 -- Số còn lại theo kho Config; nil nếu không biết
@@ -194,16 +210,23 @@ function AssetRegistry.TryClaim(
 	local alreadyHeld = false
 
 	local wrote, reason = self:_update(function(doc: Doc): Doc?
-		local holders = doc[assetId] or {}
-		if holders[key] then
+		local now = os.time()
+		local holders: { [string]: any } = doc[assetId] or {}
+		if holders[key] ~= nil then
 			alreadyHeld = true -- đã giữ rồi: coi như thành công, không ghi lại
 			return nil
 		end
-		if countHolders(holders) >= stock then
+		if countHolders(holders, now) >= stock then
 			soldOut = true
 			return nil
 		end
-		holders[key] = true
+		-- Gỡ chủ vắng mặt quá lâu để nhường suất (họ sẽ bị thu hồi khi quay lại)
+		for holder, value in table.clone(holders) do
+			if not isActive(value, now) then
+				holders[holder] = nil
+			end
+		end
+		holders[key] = now
 		doc[assetId] = holders
 		return doc
 	end)
@@ -216,12 +239,35 @@ function AssetRegistry.TryClaim(
 	return false, if soldOut then "sold_out" else "unavailable"
 end
 
+-- Nhịp của chủ đang online: ghi lại thời điểm hoạt động. Trả về "ok", "evicted" (suất đã bị gỡ vì
+-- vắng mặt quá lâu và đã có người khác nhận) hoặc "unavailable" (không đọc/ghi được registry).
+function AssetRegistry.Touch(self: AssetRegistry, assetId: string, userId: number): string
+	local key = tostring(userId)
+	local evicted = false
+	local wrote, reason = self:_update(function(doc: Doc): Doc?
+		local holders = doc[assetId]
+		if not holders or holders[key] == nil then
+			evicted = true
+			return nil
+		end
+		holders[key] = os.time()
+		return doc
+	end)
+	if evicted then
+		return "evicted"
+	end
+	if wrote then
+		return "ok"
+	end
+	return if reason then "unavailable" else "ok"
+end
+
 -- Trả một tài sản hiếm về kho
 function AssetRegistry.Release(self: AssetRegistry, assetId: string, userId: number): boolean
 	local key = tostring(userId)
 	local wrote = self:_update(function(doc: Doc): Doc?
 		local holders = doc[assetId]
-		if not holders or not holders[key] then
+		if not holders or holders[key] == nil then
 			return nil
 		end
 		holders[key] = nil

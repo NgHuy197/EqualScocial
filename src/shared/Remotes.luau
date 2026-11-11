@@ -47,6 +47,8 @@ local EVENTS = {
 --   AssetReturn(assetId)          -> ok: boolean, message: string
 --   AuctionBid(amount)            -> ok: boolean, message: string
 --   GetProfile()                  -> Types.ProfileView của chính người gọi (nil nếu bị rate-limit)
+--   EquipCosmetic(id)             -> ok, message ("" = bỏ bảng tên màu)
+--   EquipTitle(title)             -> ok, message ("" = gỡ danh hiệu)
 local FUNCTIONS = {
 	"GetState",
 	"ShopBuy",
@@ -56,6 +58,8 @@ local FUNCTIONS = {
 	"AssetReturn",
 	"AuctionBid",
 	"GetProfile",
+	"EquipCosmetic",
+	"EquipTitle",
 }
 
 local Remotes = {}

@@ -1,6 +1,6 @@
 # Equal Social — Game Design Document
 
-Phiên bản tài liệu: 0.4 (khớp bản v0.4: MVP + trường học, đánh quái, bảng xếp hạng + AURA + PvP và Season) · Tên game tạm: **Equal Social** · AI cai quản: **AURA**
+Phiên bản tài liệu: 0.5 (khớp bản v0.5: v0.4 + làm ca chung, thu hồi tài sản hiếm khi vắng mặt, bắt kịp giữa mùa, cosmetic Game Pass) · Tên game tạm: **Equal Social** · AI cai quản: **AURA**
 
 > Mọi con số trong tài liệu này là giá trị trong `src/shared/Config.luau`. Khi đổi số liệu, sửa Config **và** cập nhật bảng ở đây. Mục 4 (v0.1), 6 (v0.2), 7 (v0.3) và 8.0–8.2 (v0.4) **đã được cài đặt**; 8.3 (monetization) là bản nháp.
 
@@ -111,6 +111,7 @@ Không có bệnh tật, không mất kỹ năng, không mất đồ.
 
 - **Lương thực nhận = lương gốc × (1 + 0,1 × level kỹ năng)**, làm tròn; level tính trước khi cộng XP của lượt đó. Kho hàng: $12 (Lv0) → $18 (Lv5) → $24 (Lv10) → $36 (Lv20). Quán cà phê: $10 → $15 → $20 → $30.
 - Mỗi lượt +**10 XP**.
+- **Làm ca chung** (v0.5): mỗi người *khác* cùng nghề đã xong một lượt trong 20 giây gần đây và làm ở chỗ cách ≤ 40 studs thì lương lượt này **+10%**, tối đa **+30%** (3 người). Toast ghi "làm chung với N người (+X% lương)". Không có chuyển tiền giữa người chơi, nên không mở đường cho nuôi tài khoản phụ (câu hỏi 13). Nhân với hệ số sự kiện AURA nếu có.
 - **Năng lượng < 15** thì không cho làm việc (báo ngay khi bắt đầu giữ phím và khi hoàn thành).
 - Cooldown phía server cho mỗi người chơi trên mỗi prompt = HoldDuration × 0,85 (chặn exploit bỏ qua thời gian giữ phím; người chơi bình thường không bị ảnh hưởng).
 
@@ -339,6 +340,7 @@ Tài sản **không bao giờ thuộc về người chơi**: trả **giá thuê 
 - **Không đủ tiền**: ghi nợ 1 chu kỳ và cảnh báo. Lần trả kế tiếp **trả bù** mọi chu kỳ đã nợ. Nợ **quá 3 chu kỳ** (`GraceCycles`) thì AURA **thu hồi**; không phạt thêm tiền.
 - **Trả lại** tài sản: không hoàn tiền (`ReturnRefundPercent = 0`).
 - **Tài sản hiếm** chỉ có qua đấu giá. Kho giới hạn **toàn cầu**: một registry trong DataStore `EqualSocial_AssetRegistry_S1`, nhận/trả bằng `UpdateAsync` nên không cấp trùng giữa các server. Studio không có DataStore thì dùng registry cục bộ (báo trong Báo cáo); server thật mà DataStore lỗi thì **từ chối**, không bao giờ tự rơi về cục bộ.
+- **Chủ vắng mặt lâu** (v0.5): registry lưu thời điểm "nhịp" gần nhất của mỗi chủ (`{ userId = os.time() }`). Chủ đang online gửi nhịp lúc vào game và mỗi chu kỳ AURA. Chủ không có nhịp quá **7 ngày** (`AssetRegistry.IdleSeconds`) thì không còn được tính là đang giữ: số còn lại tăng, đấu giá mở được, và khi có người nhận suất đó thì chủ cũ bị gỡ khỏi registry. Khi chủ cũ quay lại, AURA thu hồi tài sản trong dữ liệu của họ (toast "vắng mặt quá 7 ngày"). Nếu chưa ai nhận suất thì họ vẫn giữ. Registry lỗi thì không thu hồi.
 
 ### 7.3 Thuế lũy tiến
 
@@ -448,13 +450,21 @@ Số liệu ở `Config.Pvp`, `Config.Season`. Code: `PvpService`, `SeasonServic
 
 - HUD: "Mùa 1 · còn 55 ngày · PvP 1000 điểm" và danh hiệu mới nhất. Sang mùa có toast chào mùa mới và toast cho từng danh hiệu.
 - **Cửa sổ Hồ sơ** (nút "Hồ sơ [P]" trên HUD hoặc phím P, mở ở bất cứ đâu): thành tích PvP và tài sản ròng cao nhất mùa này, mọi danh hiệu (mới nhất lên trước), lịch sử các mùa trước. Dữ liệu lấy qua `GetProfile` (chỉ hồ sơ của chính người gọi, 3 lần / 10 giây).
-- **Chưa làm:** cơ chế "bắt kịp" cho người vào giữa mùa, đêm chung kết, phần thưởng cosmetic cuối mùa, xem hồ sơ người khác.
+- **Bắt kịp giữa mùa** (v0.5): `Config.Season.StartsAt` = 11/11/2026. Người vào mùa muộn được **+10% XP mỗi tuần muộn**, tối đa **+50%**, chỉ trong **3 giờ chơi đầu** của mùa (`SeasonJoinedAt`, `SeasonPlaySeconds`, đều reset khi sang mùa). Chỉ thưởng XP, **không thưởng tiền**: người mới học nhanh hơn để mở nghề tốt hơn, nhưng không được cho tài sản. Có toast khi vào game và dòng trong cửa sổ Hồ sơ. Khi tăng `Season.Id` nhớ sửa cả `StartsAt`.
+- **Chưa làm:** đêm chung kết, phần thưởng cosmetic cuối mùa, xem hồ sơ người khác.
 
 ### 8.3 Monetization (cosmetic-only)
 
 - Bán bằng Robux: skin, bộ đồ, emote, hiệu ứng bước chân, khung tên, thú cưng *chỉ để trang trí*.
 - **Không** bán: tiền trong game, XP, kỹ năng, chỉ số, tài sản, thứ làm tăng thu nhập hay thắng PvP, hộp ngẫu nhiên có trả phí.
 - Cosmetic mua bằng Robux **không** cộng Nổi tiếng (Nổi tiếng chỉ đến từ tài sản mua bằng tiền game) để tiền thật không mua được địa vị trong cuộc cạnh tranh.
+
+**Đã làm (v0.5):**
+- **Bảng tên trên đầu nhân vật** cho mọi người (ẩn tên mặc định của Roblox): tên hiển thị + danh hiệu đang gắn.
+- **Bảng tên màu** (Vàng, Xanh neon, Hồng) bán bằng **Game Pass**. Roblox quản quyền sở hữu; server kiểm tra bằng `UserOwnsGamePassAsync` khi vào game và cập nhật ngay khi mua (`PromptGamePassPurchaseFinished`). Không lưu quyền sở hữu, không xử lý receipt. Bị hoàn tiền thì tự gỡ; lỗi mạng thì giữ nguyên.
+- **Gắn danh hiệu** miễn phí (chỉ danh hiệu đã nhận cuối mùa).
+- Lựa chọn (`Cosmetics`) giữ qua các mùa. Mua / dùng / gắn trong cửa sổ Hồ sơ (phím P).
+- `GamePassId = 0` (hiện tại): món hiện "Sắp ra mắt". **Để bán thật:** tạo Game Pass trong Creator Dashboard của experience rồi điền ID vào `Config.Cosmetics.Items[...].GamePassId`.
 
 ## 9. Ràng buộc nội dung (Roblox Community Standards)
 
@@ -469,9 +479,9 @@ Số liệu ở `Config.Pvp`, `Config.Season`. Code: `PvpService`, `SeasonServic
 1. **Trạm miễn phí quá mạnh?** *(Đã chốt: cooldown riêng mỗi người cho từng trạm, xem 4.7.)* Còn mở: có nên thêm trạm trả phí (khách sạn, spa) cho người muốn hồi nhanh hơn, như một khoản hút tiền?
 2. **Nhịp thời gian.** Chỉ số tụt hết trong 35–70 phút thực. Với người chơi phiên ngắn (10–15 phút), chỉ số hầu như không đổi. Có cần "thời gian trôi nhanh hơn" hoặc tách thời gian ngoại tuyến?
 3. **Chỉ số khi ngoại tuyến.** MVP lưu nguyên chỉ số lúc rời game. Có nên tụt nhẹ theo thời gian vắng mặt (và giới hạn mức tụt) để tránh bỏ game sạch nhưng vẫn không quá phạt?
-4. **Xuất phát thật sự công bằng?** Level kỹ năng bắt đầu 0 ở mọi người. Người chơi vào giữa mùa cần bắt kịp thế nào mà không phá cảm giác công bằng (đường tắt học nhanh, thưởng "người mới")?
+4. **Xuất phát thật sự công bằng?** *(Đã làm: thưởng XP bắt kịp, xem 8.2.)* Còn mở: mức +10%/tuần, tối đa +50% trong 3 giờ có đủ không, có nên giảm học phí cho người vào muộn?
 5. **Cân bằng nghề.** Hai nghề hiện chỉ khác lương/chi phí. Làm sao để mỗi nghề có "cá tính" (rủi ro, nhịp, tương tác xã hội) thay vì chỉ là con số?
-6. **Tương tác người chơi.** Ngoài bảng xếp hạng và PvP, MVP chưa có tương tác trực tiếp. Có nên thêm hợp tác (làm chung ca kho hàng cho thưởng cao), thương mại giữa người chơi, hay hội nhóm?
+6. **Tương tác người chơi.** *(Đã làm: làm ca chung, xem 4.6.)* Còn mở: thương mại giữa người chơi (cần giải quyết đa tài khoản trước) và hội nhóm.
 7. **Giá trị của Nổi tiếng.** Hiện chỉ là con số hiển thị. Nổi tiếng nên mở khóa gì (cửa hàng cao cấp, nghề, vị trí trên bảng) mà không tạo lợi thế kiếm tiền quá lớn?
 8. **Nổi tiếng và đồ thuê.** Với v0.3, nhà/xe thuê có cộng Nổi tiếng không? Nếu đồ thuê bị thu hồi thì Nổi tiếng giảm lại, có gây cảm giác bị phạt quá nặng không?
 9. **Cơ chế thu hồi.** Ân hạn bao lâu là hợp lý? Có cho "cứu" bằng khoản vay từ AURA (có lãi) hay không?
@@ -490,6 +500,6 @@ Số liệu ở `Config.Pvp`, `Config.Season`. Code: `PvpService`, `SeasonServic
 22. **Lịch lớp học.** Lớp chỉ mở 3–4 ngày/tuần (70 phút thực/tuần). Người chơi vào sai ngày có thấy bị chặn không? Có cần hiện đếm ngược tới ngày lớp mở?
 23. **Gian lận bảng xếp hạng.** Hiện chỉ ghi cảnh báo. Khi nào cần cơ chế gỡ người chơi khỏi bảng hoặc khoá tài khoản nghi vấn?
 24. **Tài sản có công dụng không?** Nhà/xe v0.3 chỉ cho Nổi tiếng và tài sản ròng. Có nên thêm công dụng (giường riêng, đi nhanh hơn) mà không tạo lợi thế kiếm tiền quá lớn?
-25. **Phí ngoại tuyến và tài sản hiếm bị bỏ quên.** Không tính phí ngoại tuyến nên người bỏ game giữ tài sản hiếm mãi. Có cần cơ chế thu hồi sau X ngày vắng mặt trước khi có Season?
+25. **Phí ngoại tuyến và tài sản hiếm bị bỏ quên.** *(Đã làm: suất của chủ vắng mặt quá 7 ngày được nhường khi có người nhận, xem 7.2.)* Còn mở: tài sản thường của người bỏ game không bị thu hồi (không chiếm kho nên chấp nhận).
 26. **AURA theo từng server.** Hệ số chính sách khác nhau giữa server. Có cần đồng bộ (MessagingService / MemoryStore)?
 27. **Mục tiêu tiền trung bình $5.000** có phù hợp không? Sau cooldown trạm thu nhập Lv0 ≈ $1.700–4.000/giờ (xem 4.7, 7.7); cần số liệu từ người chơi thật để chỉnh.

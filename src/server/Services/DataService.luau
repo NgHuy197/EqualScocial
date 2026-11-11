@@ -105,6 +105,9 @@ local function buildTemplate(): PlayerData
 		PeakNetWorth = 0,
 		History = {},
 		Titles = {},
+		Cosmetics = { Equipped = "", Title = "" },
+		SeasonJoinedAt = 0,
+		SeasonPlaySeconds = 0,
 	}
 end
 
@@ -192,6 +195,19 @@ local function sanitize(data: PlayerData)
 		end
 	end
 	data.Titles = titles
+
+	-- Cosmetic: chỉ giữ lựa chọn hợp lệ (quyền sở hữu Game Pass được kiểm tra lại khi vào game)
+	local cosmetics = data.Cosmetics
+	if type(cosmetics.Equipped) ~= "string" or not Config.Cosmetics.Items[cosmetics.Equipped] then
+		cosmetics.Equipped = ""
+	end
+	if type(cosmetics.Title) ~= "string" or not table.find(titles, cosmetics.Title) then
+		cosmetics.Title = ""
+	end
+	for _, field in { "SeasonJoinedAt", "SeasonPlaySeconds" } do
+		local value = (data :: any)[field];
+		(data :: any)[field] = if Validate.isFiniteNumber(value) then math.max(0, value) else 0
+	end
 
 	local aura = data.Aura
 	if not Validate.isFiniteNumber(aura.LastCycle) then

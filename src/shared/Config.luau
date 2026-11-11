@@ -243,6 +243,13 @@ local Skills = {
 local JobRules = {
 	XPPerShift = 10,
 	MinEnergyToWork = 15, -- Năng lượng DƯỚI mức này thì không được làm
+	-- Làm ca chung: mỗi người KHÁC cùng nghề đã xong một lượt trong CoopWindowSeconds giây gần đây và
+	-- ở trong CoopRadius studs thì lương lượt này +CoopBonusPerPartner (tối đa CoopMaxBonus).
+	-- Không có chuyển tiền giữa người chơi, nên không mở đường cho nuôi tài khoản phụ.
+	CoopWindowSeconds = 20,
+	CoopRadius = 40,
+	CoopBonusPerPartner = 0.10,
+	CoopMaxBonus = 0.30,
 }
 
 local Jobs: { [string]: JobDef } = {
@@ -443,10 +450,11 @@ export type TitleRule = {
 local Season = {
 	Id = 1,
 	Name = "Mùa 1",
-	-- Thời điểm kết thúc dự kiến (Unix, giây) chỉ để hiện đếm ngược; mùa CHỈ đổi khi tăng Id.
-	EndsAt = 1799168400, -- 06/01/2027 00:00 (giờ Việt Nam), 8 tuần
+	-- Mốc thời gian (Unix, giây). Mùa CHỈ đổi khi tăng Id; khi tăng Id nhớ sửa cả StartsAt và EndsAt.
+	StartsAt = 1794330000, -- 11/11/2026 00:00 (giờ Việt Nam): mốc tính "vào mùa muộn" cho CatchUp
+	EndsAt = 1799168400, -- 06/01/2027 00:00 (giờ Việt Nam), 8 tuần; chỉ để hiện đếm ngược
 	-- Các trường KHÔNG bị reset khi sang mùa (còn lại lấy lại từ template)
-	Persistent = { "SchemaVersion", "SeasonId", "History", "Titles" },
+	Persistent = { "SchemaVersion", "SeasonId", "History", "Titles", "Cosmetics" },
 	HistorySize = 20, -- số mùa giữ trong lịch sử
 	TitleRules = {
 		{ Name = "Nhà vô địch đấu trường", MinRating = 1300, MinMatches = 10 },
@@ -454,7 +462,14 @@ local Season = {
 		{ Name = "Đại gia", MinPeakNetWorth = 50000 },
 		{ Name = "Người có của", MinPeakNetWorth = 10000 },
 	} :: { TitleRule },
-	PeakCheckSeconds = 30, -- chu kỳ cập nhật tài sản ròng cao nhất của người chơi online
+	-- Bắt kịp cho người vào giữa mùa: thưởng XP (KHÔNG thưởng tiền) = BoostPerWeek mỗi tuần vào muộn
+	-- so với StartsAt, tối đa MaxBoost, chỉ trong PlayHours giờ chơi đầu tiên của mùa.
+	CatchUp = {
+		BoostPerWeek = 0.10,
+		MaxBoost = 0.50,
+		PlayHours = 3,
+		PlayTickSeconds = 60, -- chu kỳ cộng thời gian chơi cho người chơi online
+	},
 }
 
 -- ───────────────────────────── PvP có luật (v0.4) ─────────────────────────────
@@ -490,6 +505,43 @@ local Pvp = {
 	LossXP = 8,
 	DrawXP = 12,
 	StatDelta = { Energy = -10, Hunger = -5, Stress = 8 },
+}
+
+-- ───────────────────────────── Cosmetic (chỉ trang trí) ─────────────────────────────
+-- Bán bằng Game Pass (Robux). Roblox tự quản quyền sở hữu, server kiểm tra lại bằng
+-- MarketplaceService:UserOwnsGamePassAsync. Cosmetic KHÔNG cho tiền, chỉ số, XP hay Nổi tiếng.
+-- GamePassId = 0: chưa tạo pass, món hiện "Sắp ra mắt" và không mua được.
+
+export type CosmeticDef = {
+	Name: string,
+	Color: Color3, -- màu bảng tên trên đầu nhân vật
+	GamePassId: number,
+}
+
+local Cosmetics = {
+	Order = { "nametag_gold", "nametag_neon", "nametag_rose" },
+	Items = {
+		nametag_gold = {
+			Name = "Bảng tên Vàng",
+			Color = Color3.fromRGB(255, 205, 90),
+			GamePassId = 0,
+		},
+		nametag_neon = {
+			Name = "Bảng tên Xanh neon",
+			Color = Color3.fromRGB(80, 230, 220),
+			GamePassId = 0,
+		},
+		nametag_rose = {
+			Name = "Bảng tên Hồng",
+			Color = Color3.fromRGB(255, 140, 190),
+			GamePassId = 0,
+		},
+	} :: { [string]: CosmeticDef },
+	DefaultColor = Color3.fromRGB(240, 243, 250), -- màu bảng tên khi chưa gắn cosmetic
+	TitleColor = Color3.fromRGB(255, 220, 140), -- màu dòng danh hiệu dưới tên
+	NameTagMaxDistance = 70, -- studs
+	MaxIdLength = 40,
+	MaxTitleLength = 120,
 }
 
 -- ───────────────────────────── Bảng xếp hạng ─────────────────────────────
@@ -634,6 +686,10 @@ local AssetRegistry = {
 	StoreName = "EqualSocial_AssetRegistry_S" .. Season.Id, -- mỗi mùa kho tài sản hiếm mới
 	Key = "registry",
 	CacheSeconds = 30, -- đọc số lượng còn lại tối đa mỗi 30 giây
+	-- Chủ tài sản hiếm vắng mặt quá ngần này (không có "nhịp" nào gửi lên registry) thì suất của họ
+	-- không còn được tính: đấu giá mở được và người thắng nhận suất đó. Khi quay lại, AURA thu hồi
+	-- tài sản trong dữ liệu của họ.
+	IdleSeconds = 7 * 86400,
 }
 
 -- ───────────────────────────── Trạm miễn phí ─────────────────────────────
@@ -752,6 +808,8 @@ local RateLimits = {
 	AuctionBid = { Calls = 4, Window = 5 },
 	PvpAttack = { Calls = 12, Window = 5 }, -- RemoteEvent; nhịp đánh thật do Pvp.AttackInterval chặn
 	GetProfile = { Calls = 3, Window = 10 },
+	EquipCosmetic = { Calls = 5, Window = 5 },
+	EquipTitle = { Calls = 5, Window = 5 },
 }
 
 local Replication = {
@@ -996,6 +1054,31 @@ local Text = {
 	ProfileNoHistory = "Chưa có mùa nào kết thúc.",
 	ProfileHistoryRow = "%s · PvP %d (%d/%d/%d) · đỉnh %s",
 	ProfileHistoryTitles = "Danh hiệu: %s",
+	ProfileCatchUp = "Thưởng bắt kịp: +%d%% XP trong %s chơi nữa (vào mùa muộn).",
+	ProfileNameTags = "BẢNG TÊN (Robux, chỉ trang trí)",
+	ProfileEquipTitle = "Gắn",
+	ProfileTitleEquipped = "Đang gắn",
+	ProfileRemoveTitle = "Gỡ danh hiệu đang gắn",
+	CosmeticBuy = "Mua",
+	CosmeticUse = "Dùng",
+	CosmeticInUse = "Đang dùng",
+	CosmeticSoon = "Sắp ra mắt",
+	CosmeticRemove = "Bỏ bảng tên màu",
+	CosmeticRemoveButton = "Bỏ",
+	ProfileRemoveTitleButton = "Gỡ",
+	DurationHoursMinutes = "%d giờ %d phút",
+	CosmeticEquipped = "Đã dùng %s.",
+	CosmeticUnequipped = "Đã bỏ bảng tên màu.",
+	CosmeticNotOwned = "Bạn chưa sở hữu món này.",
+	CosmeticPurchased = "Cảm ơn bạn! Đã mở khóa %s.",
+	TitleEquipped = "Đã gắn danh hiệu: %s",
+	TitleUnequipped = "Đã gỡ danh hiệu.",
+	TitleNotOwned = "Bạn chưa có danh hiệu này.",
+
+	-- Làm ca chung, thu hồi tài sản hiếm, bắt kịp
+	JobCoopBonus = " · làm chung với %d người (+%d%% lương)",
+	AssetIdleRevoked = "AURA đã thu hồi %s vì bạn vắng mặt quá %d ngày; tài sản đã trở về kho.",
+	CatchUpNotice = "Bạn vào mùa muộn: +%d%% XP trong %d giờ chơi đầu để bắt kịp mọi người.",
 
 	AuraTitle = "Trụ sở AURA",
 	AuraClose = "Đóng",
@@ -1044,7 +1127,7 @@ local Text = {
 }
 
 local Config = {
-	Version = "0.4.0",
+	Version = "0.5.0",
 	GameName = "Equal Social",
 	AIName = "AURA",
 
@@ -1085,6 +1168,7 @@ local Config = {
 	Monsters = Monsters,
 	Season = Season,
 	Pvp = Pvp,
+	Cosmetics = Cosmetics,
 	Leaderboard = Leaderboard,
 	Assets = Assets,
 	AuraEvents = AuraEvents,
