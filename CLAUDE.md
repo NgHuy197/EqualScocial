@@ -99,7 +99,7 @@ Chạy trong Studio (Play, hoặc Test → 2 người chơi). Để test nhanh t
 2. **Làm việc nhận tiền**: giữ E 4 giây ở *Bốc vác kho hàng* → +$12 (tiền $112), +10 XP Sức mạnh, Năng lượng −6, Độ no −4, Sạch sẽ −5, Căng thẳng +3; có toast. *Pha chế cà phê* (3 giây) → +$10, XP Giao tiếp.
 3. **Lên cấp & lương**: làm 5 lượt cùng một nghề → toast "lên cấp 1"; lượt kế lương = round(12 × 1.1) = $13.
 4. **Quá mệt**: hạ Năng lượng dưới 15 (làm liên tục ~15 lượt) → giữ phím báo "quá mệt", không nhận tiền/XP.
-5. **Trạm miễn phí**: Tắm +40 Sạch sẽ; Giường +40 Năng lượng, −10 Căng thẳng; Ghế công viên −6 Căng thẳng, +4 Hạnh phúc. Giá trị không vượt quá 0–100.
+5. **Trạm miễn phí**: Tắm +40 Sạch sẽ; Giường +40 Năng lượng, −10 Căng thẳng; Ghế công viên −6 Căng thẳng, +4 Hạnh phúc. Giá trị không vượt quá 0–100. Dùng lại cùng trạm trước cooldown (Tắm 2 phút, Giường 3 phút, Ghế 45 giây) → toast "cần chờ thêm …", không có tác dụng; thoát ra vào lại vẫn còn cooldown.
 6. **Cửa hàng**: mở bằng E; Bánh mì $10 (+30 Độ no), Phở $25 (+60 Độ no, +5 Hạnh phúc), Nước suối $5 (+8 Độ no, +5 Năng lượng); thiếu tiền → "Bạn không đủ tiền". Kính râm $200 (Nổi tiếng +5), Đồng hồ vàng $600 (+15); mua lần hai → nút "Đã sở hữu" và server từ chối. Đi xa hơn ~14 studs → cửa sổ tự đóng kèm toast.
 7. **Chỉ số tụt theo thời gian** (đứng yên): mỗi phút Độ no −2, Năng lượng −1.5, Sạch sẽ −1; khi cả ba còn ≥ 30 thì Hạnh phúc +0.5/phút và Căng thẳng −0.5/phút. Khi một nhu cầu < 30: Hạnh phúc −1/phút, Căng thẳng +1/phút (mỗi nhu cầu thấp tính một lần).
 8. **Kiệt sức**: đặt `Config.Stats.TimeScale = 300` rồi đứng chờ (Độ no về 0 sau ≈ 7 giây thực, kiệt sức sau ≈ 12 giây) → toast "kiệt sức", mất 10% tiền, respawn ở Spawn, chỉ số về mức an toàn (60/60/60/50/30/60). Nhớ trả `TimeScale` về `1`.

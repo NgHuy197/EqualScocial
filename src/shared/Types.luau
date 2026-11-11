@@ -42,6 +42,7 @@ export type PlayerData = {
 	Stats: { [string]: number },
 	Skills: { [string]: SkillRecord },
 	Owned: { [string]: boolean }, -- itemId -> true (đồ sở hữu vĩnh viễn)
+	StationUsed: { [string]: number }, -- stationId -> os.time() lần dùng gần nhất (cooldown trạm)
 	Combat: CombatRecord,
 	Assets: { [string]: AssetRecord }, -- assetId -> tài sản đang thuê từ AURA
 	Aura: AuraRecord,

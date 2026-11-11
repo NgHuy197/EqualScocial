@@ -93,6 +93,7 @@ local function buildTemplate(): PlayerData
 		Stats = deepCopy(Config.Stats.Start),
 		Skills = skills,
 		Owned = {},
+		StationUsed = {},
 		Combat = { WindowStart = 0, Earned = 0 },
 		Assets = {},
 		Aura = { LastCycle = 0 },
@@ -135,6 +136,13 @@ local function sanitize(data: PlayerData)
 		data.Combat = { WindowStart = 0, Earned = 0 }
 	else
 		combat.Earned = math.max(0, combat.Earned)
+	end
+
+	-- Cooldown trạm: bỏ trạm không còn trong Config và mốc thời gian hỏng
+	for stationId, usedAt in data.StationUsed do
+		if not Config.Stations[stationId] or not Validate.isFiniteNumber(usedAt) then
+			data.StationUsed[stationId] = nil
+		end
 	end
 
 	-- Tài sản thuê từ AURA: bỏ tài sản không còn trong Config, số hỏng thì đặt lại
