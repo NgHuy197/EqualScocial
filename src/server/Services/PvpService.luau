@@ -3,7 +3,10 @@
 	PvpService — Đấu trường 1v1 có luật (v0.4).
 
 	  * Vào / rời hàng chờ: nhấn E ở quầy (tag Config.Tags.Arena). Cần dữ liệu đã tải, Năng lượng >=
-	    Pvp.MinEnergy, không đang đấu. Ghép cặp theo thứ tự vào hàng chờ.
+	    Pvp.MinEnergy, không đang đấu.
+	  * Ghép cặp theo điểm: người chờ lâu nhất được ghép với người có điểm gần nhất trong khoảng chênh
+	    cho phép (nới dần theo thời gian chờ, xem GetAllowedGap). Map chỉ có một cặp bục nên mỗi lúc chỉ
+	    một trận; người khác tiếp tục chờ.
 	  * Trận: dịch chuyển hai người lên hai bục (tag ArenaPad, attribute PadIndex 1/2), đếm ngược, rồi
 	    đánh trong Pvp.MatchSeconds giây. Máu PvP là số RIÊNG trên server (Pvp.MaxHP), không đụng tới máu
 	    nhân vật, nên thua trận không chết, không mất tiền.
@@ -46,6 +49,7 @@ local PvpUpdate = Remotes.Event("PvpUpdate")
 
 local services: Types.Services = {}
 local queue: { Player } = {}
+local joinedAt: { [Player]: number } = {} -- giờ server lúc vào hàng chờ
 local matchOf: { [Player]: Match } = {}
 local matches: { Match } = {}
 local attackLimiter =
@@ -120,6 +124,48 @@ function PvpService:GetReturnPosition(): Vector3?
 		end
 	end
 	return nil
+end
+
+-- Khoảng chênh điểm tối đa được ghép khi người chờ lâu hơn đã chờ `waited` giây
+function PvpService:GetAllowedGap(waited: number): number
+	return Config.Pvp.MatchGapBase + Config.Pvp.MatchGapPerSecond * math.max(0, waited)
+end
+
+local function ratingOf(player: Player): number
+	local data = services.Data:Get(player)
+	return if data then data.Pvp.Rating else Config.Pvp.StartRating
+end
+
+-- Chọn một cặp trong hàng chờ: duyệt theo thứ tự vào hàng chờ, với mỗi người tìm đối thủ có điểm gần
+-- nhất mà chênh lệch nằm trong khoảng cho phép. Trả về nil nếu chưa ghép được ai.
+function PvpService:_pickPair(time: number): (Player?, Player?)
+	for i, a in queue do
+		local ratingA = ratingOf(a)
+		local best: Player? = nil
+		local bestDiff = math.huge
+		for j = i + 1, #queue do
+			local b = queue[j]
+			local diff = math.abs(ratingOf(b) - ratingA)
+			local since = math.min(joinedAt[a] or time, joinedAt[b] or time)
+			if diff <= self:GetAllowedGap(time - since) and diff < bestDiff then
+				best, bestDiff = b, diff
+			end
+		end
+		if best then
+			return a, best
+		end
+	end
+	return nil, nil
+end
+
+-- Có trận nào đang diễn ra (chưa kết thúc) không
+function PvpService:IsArenaBusy(): boolean
+	for _, match in matches do
+		if match.Phase ~= "ended" then
+			return true
+		end
+	end
+	return false
 end
 
 function PvpService:IsQueued(player: Player): boolean
@@ -257,6 +303,7 @@ function PvpService:ToggleQueue(player: Player)
 		return
 	end
 	table.insert(queue, player)
+	joinedAt[player] = now()
 	services.Replication:Notify(player, string.format(Config.Text.PvpJoined, #queue), "info")
 	self:_send(player)
 end
@@ -266,6 +313,7 @@ function PvpService:_removeFromQueue(player: Player)
 	if index then
 		table.remove(queue, index)
 	end
+	joinedAt[player] = nil
 end
 
 -- Người trong hàng chờ còn đủ điều kiện để bắt đầu trận không
@@ -279,18 +327,26 @@ end
 function PvpService:_matchmake()
 	-- Bỏ người không còn đủ điều kiện (thoát, chưa có nhân vật...)
 	for i = #queue, 1, -1 do
-		if not canStart(queue[i]) then
+		local player = queue[i]
+		if not canStart(player) then
 			table.remove(queue, i)
+			joinedAt[player] = nil
 		end
 	end
-	while #queue >= 2 do
-		local pad1, pad2 = self:GetPads()
-		if not pad1 or not pad2 then
-			return
-		end
-		local a = table.remove(queue, 1) :: Player
-		local b = table.remove(queue, 1) :: Player
-		self:_startMatch(a, b, pad1, pad2, now())
+	-- Một đấu trường, một trận mỗi lúc
+	if #queue < 2 or self:IsArenaBusy() then
+		return
+	end
+	local pad1, pad2 = self:GetPads()
+	if not pad1 or not pad2 then
+		return
+	end
+	local time = now()
+	local a, b = self:_pickPair(time)
+	if a and b then
+		self:_removeFromQueue(a)
+		self:_removeFromQueue(b)
+		self:_startMatch(a, b, pad1, pad2, time)
 	end
 end
 

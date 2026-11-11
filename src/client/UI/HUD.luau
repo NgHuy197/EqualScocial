@@ -35,6 +35,7 @@ type Fields = {
 	Aura: TextLabel,
 	Season: TextLabel,
 	Pvp: TextLabel,
+	ProfileButton: TextButton,
 	Stats: { [string]: StatRow },
 	Skills: { [string]: SkillRow },
 }
@@ -123,6 +124,19 @@ function HUD.new(parent: Instance): HUD
 	season.TextWrapped = true
 	season.LayoutOrder = nextOrder()
 
+	-- Nút mở cửa sổ Hồ sơ (init.client nối sự kiện; HUD chỉ dựng nút)
+	local profileButton = Instance.new("TextButton")
+	profileButton.Name = "ProfileButton"
+	profileButton.Size = UDim2.new(1, 0, 0, 26)
+	profileButton.BackgroundColor3 = Theme.Colors.PanelLight
+	profileButton.Font = Theme.Fonts.Semibold
+	profileButton.Text = Config.Text.ProfileButton
+	profileButton.TextSize = 16
+	profileButton.TextColor3 = Theme.Colors.Text
+	profileButton.LayoutOrder = nextOrder()
+	profileButton.Parent = root
+	Theme.corner(profileButton, 6)
+
 	-- Trạng thái đấu trường: chỉ hiện khi đang chờ / đang đấu
 	local pvp = Theme.label(root, "", 16, Theme.Colors.Accent, Theme.Fonts.Semibold)
 	pvp.Name = "Pvp"
@@ -200,6 +214,7 @@ function HUD.new(parent: Instance): HUD
 		Aura = aura,
 		Season = season,
 		Pvp = pvp,
+		ProfileButton = profileButton,
 		Stats = statRows,
 		Skills = skillRows,
 	}, HUD)

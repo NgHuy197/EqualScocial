@@ -35,6 +35,7 @@ Tài liệu: [docs/GDD.md](docs/GDD.md) (thiết kế, công thức, lộ trình
 **v0.4**
 - **Đấu trường 1v1**: hàng chờ ở quầy, máu PvP riêng (không chết, không mất tiền), phím F / nút "Đánh", luật hết giờ / ra khỏi sàn / thoát game, điểm Elo theo mùa. **Không có cá cược hay quỹ thưởng** (Roblox cấm cờ bạc mô phỏng).
 - **Season**: tăng `Config.Season.Id` để bắt đầu mùa mới, mọi người về vạch xuất phát; hồ sơ mùa cũ lưu vào lịch sử, danh hiệu theo thành tích; HUD đếm ngược tới cuối mùa.
+- **Ghép cặp theo điểm** (khoảng chênh nới dần theo thời gian chờ, mỗi lúc một trận) và **cửa sổ Hồ sơ** (phím P): danh hiệu, lịch sử các mùa, thành tích PvP.
 
 ## Cài đặt từng bước
 
@@ -119,7 +120,11 @@ stylua --check src        # định dạng (bỏ --check để tự format)
 selene generate-roblox-std   # chỉ lần đầu: sinh roblox.yml
 selene src                # lint
 rojo build -o EqualSocial.rbxl   # kiểm tra file project
+python tests/build_tests.py      # ghép harness test với mã nguồn
+luau tests/out/test_all.luau     # chạy test logic (cần Luau CLI)
 ```
+
+CI trên GitHub Actions chạy tất cả các bước này (kể cả type-check bên dưới) cho mỗi pull request.
 
 Type-check `--!strict` bằng luau-lsp: tải file định nghĩa API Roblox `globalTypes.d.luau` từ [luau-lsp](https://github.com/JohnnyMorganz/luau-lsp) (không commit file này), rồi:
 

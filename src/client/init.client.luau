@@ -26,6 +26,7 @@ local Types = require(ReplicatedStorage.Shared.Types)
 local AuraWindow = require(script.UI.AuraWindow)
 local HUD = require(script.UI.HUD)
 local LeaderboardWindow = require(script.UI.LeaderboardWindow)
+local ProfileWindow = require(script.UI.ProfileWindow)
 local ShopWindow = require(script.UI.ShopWindow)
 local Toast = require(script.UI.Toast)
 
@@ -143,6 +144,43 @@ local function updateAuraHud()
 	end
 end
 
+-- ── Hồ sơ: danh hiệu và lịch sử mùa ──
+local getProfile = Remotes.Function("GetProfile")
+local function fetchProfile(): Types.ProfileView?
+	local ok, view = pcall(function()
+		return getProfile:InvokeServer()
+	end)
+	if ok and type(view) == "table" and type(view.History) == "table" then
+		return view :: Types.ProfileView
+	end
+	return nil
+end
+
+local profileWindow = ProfileWindow.new(screenGui, fetchProfile)
+
+-- Mở hồ sơ thì đóng các cửa sổ khác (chỉ một cửa sổ mở cùng lúc)
+local function toggleProfile()
+	if not profileWindow:IsOpen() then
+		shopWindow:Close()
+		leaderboardWindow:Close()
+		auraWindow:Close()
+	end
+	profileWindow:Toggle()
+end
+
+hud.ProfileButton.Activated:Connect(toggleProfile)
+ContextActionService:BindAction(
+	"EqualSocialProfile",
+	function(_name, inputState: Enum.UserInputState)
+		if inputState == Enum.UserInputState.Begin then
+			toggleProfile()
+		end
+		return Enum.ContextActionResult.Pass
+	end,
+	false,
+	Enum.KeyCode.P
+)
+
 -- ── Mùa và Đấu trường (v0.4) ──
 local pvpAttack = Remotes.Event("PvpAttack")
 local pvpState: Types.PvpState = { State = "idle" }
@@ -257,6 +295,7 @@ Remotes.Event("OpenShop").OnClientEvent:Connect(function(shopId: any)
 	if type(shopId) == "string" and Config.Shops[shopId] then
 		leaderboardWindow:Close() -- chỉ một cửa sổ mở cùng lúc
 		auraWindow:Close()
+		profileWindow:Close()
 		shopWindow:Open(shopId, state)
 	end
 end)
@@ -264,12 +303,14 @@ end)
 Remotes.Event("OpenLeaderboard").OnClientEvent:Connect(function()
 	shopWindow:Close()
 	auraWindow:Close()
+	profileWindow:Close()
 	leaderboardWindow:Open()
 end)
 
 Remotes.Event("OpenAura").OnClientEvent:Connect(function()
 	shopWindow:Close()
 	leaderboardWindow:Close()
+	profileWindow:Close()
 	auraWindow:Open()
 end)
 

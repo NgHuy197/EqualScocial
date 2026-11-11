@@ -98,6 +98,14 @@ export type SeasonSnapshot = {
 	Pvp: PvpRecord,
 	Title: string?, -- danh hiệu mới nhất
 }
+-- Hồ sơ của chính người chơi (GetProfile): thành tích mùa này, danh hiệu, lịch sử các mùa trước
+export type ProfileView = {
+	SeasonName: string,
+	Pvp: PvpRecord,
+	PeakNetWorth: number,
+	Titles: { string }, -- mới nhất ở cuối
+	History: { SeasonRecord }, -- mới nhất ở cuối
+}
 -- Trạng thái đấu trường của MỘT người chơi (server -> client qua PvpUpdate)
 export type PvpState = {
 	State: string, -- "idle" | "queue" | "countdown" | "fight"

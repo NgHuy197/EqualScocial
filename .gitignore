@@ -30,3 +30,6 @@ desktop.ini
 .env
 .env.*
 *.key
+
+# Bản ghép của test harness (tests/build_tests.py)
+tests/out/

@@ -476,6 +476,10 @@ local Pvp = {
 	ZoneRadius = 34, -- ra khỏi vùng đấu (tính từ tâm đấu trường) khi đang đấu = xử thua
 	MinEnergy = 20, -- cần ít nhất ngần này Năng lượng để vào hàng chờ
 	MatchmakeSeconds = 1, -- chu kỳ ghép cặp
+	-- Ghép cặp theo điểm: chênh lệch cho phép = MatchGapBase + MatchGapPerSecond * số giây đã chờ
+	-- (của người chờ lâu hơn), nên ai chờ lâu vẫn sẽ có trận. Mỗi đấu trường chỉ một trận mỗi lúc.
+	MatchGapBase = 100,
+	MatchGapPerSecond = 10,
 	TickSeconds = 0.25, -- chu kỳ kiểm tra vùng đấu / hết giờ
 	ReturnDelaySeconds = 2, -- sau trận chờ ngần này rồi đưa người chơi về cạnh quầy
 	-- Elo
@@ -747,6 +751,7 @@ local RateLimits = {
 	AssetReturn = { Calls = 4, Window = 5 },
 	AuctionBid = { Calls = 4, Window = 5 },
 	PvpAttack = { Calls = 12, Window = 5 }, -- RemoteEvent; nhịp đánh thật do Pvp.AttackInterval chặn
+	GetProfile = { Calls = 3, Window = 10 },
 }
 
 local Replication = {
@@ -976,6 +981,21 @@ local Text = {
 	PvpHudQueue = "Đấu trường: đang chờ ghép cặp",
 	PvpHudCountdown = "Đấu trường: gặp %s, bắt đầu sau %d",
 	PvpHudFight = "Đấu trường: Bạn %d - %d %s · %s · [F] Đánh",
+
+	-- Hồ sơ (cửa sổ danh hiệu và lịch sử mùa)
+	ProfileButton = "Hồ sơ [P]",
+	ProfileTitle = "Hồ sơ",
+	ProfileClose = "Đóng",
+	ProfileLoading = "Đang tải hồ sơ...",
+	ProfileError = "Không tải được hồ sơ (thử lại sau vài giây).",
+	ProfileSeason = "%s · PvP %d điểm · %d thắng / %d thua / %d hòa",
+	ProfilePeak = "Tài sản ròng cao nhất mùa này: %s",
+	ProfileTitles = "DANH HIỆU",
+	ProfileNoTitles = "Chưa có danh hiệu. Đạt thành tích PvP hoặc tài sản trước khi hết mùa để nhận.",
+	ProfileHistory = "CÁC MÙA TRƯỚC",
+	ProfileNoHistory = "Chưa có mùa nào kết thúc.",
+	ProfileHistoryRow = "%s · PvP %d (%d/%d/%d) · đỉnh %s",
+	ProfileHistoryTitles = "Danh hiệu: %s",
 
 	AuraTitle = "Trụ sở AURA",
 	AuraClose = "Đóng",
