@@ -159,12 +159,13 @@ function AuraWindow.new(parent: Instance, callbacks: Callbacks): AuraWindow
 	closeButton.TextColor3 = Theme.Colors.Text
 	closeButton.Parent = root
 	Theme.corner(closeButton, 8)
+	Theme.chrome(root, title, closeButton, Theme.Colors.Aura)
 
 	-- Thanh tab
 	local tabBar = Instance.new("Frame")
 	tabBar.Name = "Tabs"
 	tabBar.BackgroundTransparency = 1
-	tabBar.Position = UDim2.fromOffset(12, 50)
+	tabBar.Position = UDim2.fromOffset(12, 60)
 	tabBar.Size = UDim2.new(1, -24, 0, 36)
 	tabBar.Parent = root
 	local tabLayout = Instance.new("UIListLayout")
@@ -198,8 +199,8 @@ function AuraWindow.new(parent: Instance, callbacks: Callbacks): AuraWindow
 	content.Name = "Content"
 	content.BackgroundTransparency = 1
 	content.BorderSizePixel = 0
-	content.Position = UDim2.fromOffset(12, 94)
-	content.Size = UDim2.new(1, -24, 1, -106)
+	content.Position = UDim2.fromOffset(12, 104)
+	content.Size = UDim2.new(1, -24, 1, -116)
 	content.CanvasSize = UDim2.new()
 	content.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	content.ScrollBarThickness = 6
@@ -715,7 +716,7 @@ function AuraWindow.Open(self: AuraWindow)
 	local root = getRootPart()
 	self.Anchor = findAnchor()
 	self.FallbackPosition = if root then root.Position else nil
-	self.Root.Visible = true
+	Theme.show(self.Root)
 	self.Busy = false
 	self:_render()
 

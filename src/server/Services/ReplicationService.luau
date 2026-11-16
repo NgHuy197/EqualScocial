@@ -20,6 +20,7 @@ local Types = require(ReplicatedStorage.Shared.Types)
 local RateLimiter = require(script.Parent.Parent.Util.RateLimiter)
 
 local StateUpdate = Remotes.Event("StateUpdate")
+local EffectEvent = Remotes.Event("Effect")
 local NotifyEvent = Remotes.Event("Notify")
 local GetState = Remotes.Function("GetState")
 
@@ -89,6 +90,15 @@ function ReplicationService:Notify(player: Player, text: string, kind: string?)
 	NotifyEvent:FireClient(player, text, resolved)
 end
 
+-- Hiệu ứng tức thời cho riêng người chơi (số bay + âm thanh phía client). Chỉ để nhìn / nghe:
+-- trạng thái thật vẫn đi qua snapshot.
+function ReplicationService:Effect(player: Player, kind: string, value: number, position: Vector3?)
+	if player.Parent ~= Players then
+		return
+	end
+	EffectEvent:FireClient(player, kind, value, position)
+end
+
 -- Dựng snapshot từ dữ liệu server (nil nếu chưa tải xong dữ liệu)
 function ReplicationService:BuildSnapshot(player: Player): Types.Snapshot?
 	local data = services.Data:Get(player)
@@ -127,10 +137,14 @@ function ReplicationService:BuildSnapshot(player: Player): Types.Snapshot?
 		assets[assetId] = record.Missed
 	end
 
+	local fame = services.Shop:GetFame(player) + services.Assets:GetFame(player)
+	-- Bảng tên trên đầu hiện Nổi tiếng: chỉ dựng lại khi con số đổi
+	services.Cosmetics:SetFame(player, fame)
+
 	return {
 		Seq = seq,
 		Money = data.Money,
-		Fame = services.Shop:GetFame(player) + services.Assets:GetFame(player),
+		Fame = fame,
 		NetWorth = services.Leaderboard:GetNetWorth(player),
 		Rank = services.Leaderboard:GetRank(player),
 		Stats = stats,
@@ -138,6 +152,7 @@ function ReplicationService:BuildSnapshot(player: Player): Types.Snapshot?
 		Owned = owned,
 		Assets = assets,
 		Season = services.Season:BuildSnapshot(data),
+		Guide = services.Guide:GetText(player),
 	}
 end
 

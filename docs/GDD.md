@@ -1,8 +1,8 @@
 # Equal Social — Game Design Document
 
-Phiên bản tài liệu: 0.5 (khớp bản v0.5: v0.4 + làm ca chung, thu hồi tài sản hiếm khi vắng mặt, bắt kịp giữa mùa, cosmetic Game Pass) · Tên game tạm: **Equal Social** · AI cai quản: **AURA**
+Phiên bản tài liệu: 0.7 (khớp bản v0.7: v0.6 + quái di chuyển, số bay và âm thanh, hồ sơ công khai) · Tên game tạm: **Equal Social** · AI cai quản: **AURA**
 
-> Mọi con số trong tài liệu này là giá trị trong `src/shared/Config.luau`. Khi đổi số liệu, sửa Config **và** cập nhật bảng ở đây. Mục 4 (v0.1), 6 (v0.2), 7 (v0.3) và 8.0–8.2 (v0.4) **đã được cài đặt**; 8.3 (monetization) là bản nháp.
+> Mọi con số trong tài liệu này là giá trị trong `src/shared/Config.luau`. Khi đổi số liệu, sửa Config **và** cập nhật bảng ở đây. Mục 4 (v0.1), 6 (v0.2), 7 (v0.3), 8.0–8.2 (v0.4), phần "Đã làm" của 8.3 (v0.5), 8b (v0.6) và 8c (v0.7) **đã được cài đặt**.
 
 ## 1. Tầm nhìn
 
@@ -185,7 +185,13 @@ Có thêm trong v0.3 (xem mục 7): Trụ sở AURA, tài sản thuê (nhà, xe)
 
 Có thêm trong v0.4 (xem mục 8): Đấu trường 1v1 có luật và điểm Elo, Season (về vạch xuất phát, lịch sử, danh hiệu).
 
-Chưa có: cosmetic bán bằng Robux, tương tác trực tiếp giữa người chơi (trao đổi, chat bubble tùy biến...).
+Có thêm trong v0.5: làm ca chung, thu hồi tài sản hiếm khi vắng mặt, bắt kịp giữa mùa, cosmetic Game Pass.
+
+Có thêm trong v0.6 (xem mục 8b): thị trấn dựng sẵn, ngày đêm, giao diện mới, hướng dẫn người mới, Nổi tiếng trên bảng tên.
+
+Có thêm trong v0.7 (xem mục 8c): quái di chuyển, số bay và âm thanh, hồ sơ công khai của người chơi khác.
+
+Chưa có: tương tác trực tiếp giữa người chơi (trao đổi, hội nhóm), nhạc nền (đã có chỗ cấu hình, chưa có bài), hoạt ảnh nhân vật khi làm việc, PvP theo đội.
 
 ## 6. v0.2 — Học tập, đánh quái, bảng xếp hạng (đã triển khai)
 
@@ -299,7 +305,7 @@ Nghề chưa mở khóa vẫn hiện trên map kèm "(cần …)"; làm thử s�
 
 ### 6.8 Hạn chế đã biết của v0.2
 
-- Đánh quái bằng cách nhấn E liên tục (không có vũ khí, hoạt ảnh hay né tránh); quái không di chuyển.
+- Đánh quái bằng cách nhấn E liên tục (không có vũ khí, hoạt ảnh hay né tránh). *(Từ v0.7 quái đã di chuyển, xem 8c.1.)*
 - ProximityPrompt mặc định của Roblox **chỉ hiện khi prompt nằm trong tầm nhìn camera**; khi test bằng công cụ tự động phải quay camera về phía khối.
 - Phát hiện gian lận bảng xếp hạng chỉ dừng ở cảnh báo; chưa có cơ chế gỡ khỏi bảng.
 - Lưu/tải và OrderedDataStore **thật** chưa được kiểm chứng (cần publish place); logic đã được kiểm thử bằng DataStore giả.
@@ -411,7 +417,7 @@ Số liệu ở `Config.Pvp`, `Config.Season`. Code: `PvpService`, `SeasonServic
 
 ### 8.1 Đấu trường 1v1
 
-- **Vị trí** (map placeholder): sàn đấu tâm (0, −125), hai bục cách tâm 14 studs theo trục X, quầy hàng chờ ở (0, −89). Map thật: gắn tag `ES_Arena` cho quầy và `ES_ArenaPad` + `PadIndex` = 1/2 cho hai bục; tâm đấu trường = trung điểm hai bục.
+- **Vị trí** (map dựng sẵn): sàn đấu tròn tâm (0, −125), hai bục cách tâm 14 studs theo trục X, quầy hàng chờ ở (0, −89). Map thật: gắn tag `ES_Arena` cho quầy và `ES_ArenaPad` + `PadIndex` = 1/2 cho hai bục; tâm đấu trường = trung điểm hai bục.
 - **Hàng chờ:** nhấn E ở quầy để vào, nhấn lần nữa để rời. Cần ≥ 20 Năng lượng.
 - **Ghép cặp theo điểm** (mỗi giây): duyệt theo thứ tự vào hàng chờ, mỗi người được ghép với người có điểm gần nhất mà chênh lệch ≤ 100 + 10 × số giây đã chờ (của người chờ lâu hơn). Ví dụ chênh 400 điểm thì sau 30 giây chờ mới được ghép. Map có một cặp bục nên **mỗi lúc chỉ một trận**; người khác chờ trận đang diễn ra kết thúc.
 - **Trận:** dịch chuyển lên hai bục, đếm ngược 3 giây, đánh 60 giây. **Máu PvP riêng** (100), không đụng tới máu nhân vật: thua không chết, không mất tiền.
@@ -451,7 +457,7 @@ Số liệu ở `Config.Pvp`, `Config.Season`. Code: `PvpService`, `SeasonServic
 - HUD: "Mùa 1 · còn 55 ngày · PvP 1000 điểm" và danh hiệu mới nhất. Sang mùa có toast chào mùa mới và toast cho từng danh hiệu.
 - **Cửa sổ Hồ sơ** (nút "Hồ sơ [P]" trên HUD hoặc phím P, mở ở bất cứ đâu): thành tích PvP và tài sản ròng cao nhất mùa này, mọi danh hiệu (mới nhất lên trước), lịch sử các mùa trước. Dữ liệu lấy qua `GetProfile` (chỉ hồ sơ của chính người gọi, 3 lần / 10 giây).
 - **Bắt kịp giữa mùa** (v0.5): `Config.Season.StartsAt` = 11/11/2026. Người vào mùa muộn được **+10% XP mỗi tuần muộn**, tối đa **+50%**, chỉ trong **3 giờ chơi đầu** của mùa (`SeasonJoinedAt`, `SeasonPlaySeconds`, đều reset khi sang mùa). Chỉ thưởng XP, **không thưởng tiền**: người mới học nhanh hơn để mở nghề tốt hơn, nhưng không được cho tài sản. Có toast khi vào game và dòng trong cửa sổ Hồ sơ. Khi tăng `Season.Id` nhớ sửa cả `StartsAt`.
-- **Chưa làm:** đêm chung kết, phần thưởng cosmetic cuối mùa, xem hồ sơ người khác.
+- **Chưa làm:** đêm chung kết, phần thưởng cosmetic cuối mùa. *(Xem hồ sơ người khác: đã làm ở v0.7, mục 8c.3.)*
 
 ### 8.3 Monetization (cosmetic-only)
 
@@ -465,6 +471,101 @@ Số liệu ở `Config.Pvp`, `Config.Season`. Code: `PvpService`, `SeasonServic
 - **Gắn danh hiệu** miễn phí (chỉ danh hiệu đã nhận cuối mùa).
 - Lựa chọn (`Cosmetics`) giữ qua các mùa. Mua / dùng / gắn trong cửa sổ Hồ sơ (phím P).
 - `GamePassId = 0` (hiện tại): món hiện "Sắp ra mắt". **Để bán thật:** tạo Game Pass trong Creator Dashboard của experience rồi điền ID vào `Config.Cosmetics.Items[...].GamePassId`.
+
+## 8b. v0.6 — Thế giới, giao diện và hướng dẫn (đã triển khai)
+
+Code: `server/WorldBuilder`, `server/World/*`, `server/Util/MonsterModel`, `server/Services/GuideService`, client `Ambience` và `UI/*`. Số liệu ở `Config.World`, `Config.Ambience`, `Config.Calendar`, `Config.Guide`, `Config.UI`.
+
+### 8b.1 Thị trấn
+
+- **Phong cách:** low-poly màu phẳng, dựng hoàn toàn từ khối cơ bản bằng code. Không dùng asset ngoài nên không phụ thuộc kiểm duyệt hay quyền sở hữu asset, build ra là có map, và mọi thay đổi nằm trong git.
+- **Bố cục** (giữ nguyên toạ độ các khu của bản trước): quảng trường tròn bán kính 24 quanh điểm hồi sinh; bốn đường vòng cách tâm dãy nhà 17 studs; bốn lối nối quảng trường với đường vòng.
+
+| Hướng | Khu |
+| --- | --- |
+| Tây | dãy nghề: quán cà phê, văn phòng hai tầng, xưởng sửa chữa, kho hàng |
+| Đông | trạm nghỉ (nhà nghỉ có giường, ghế công viên, buồng tắm), Trụ sở AURA, Khu tài sản AURA, hồ nước |
+| Bắc | cửa hàng thời trang, quán ăn, rồi tới Đấu trường tròn có khán đài ba phía |
+| Nam | bảng xếp hạng, bốn lớp học, Bãi luyện tập có hàng rào, Bệnh xá (tây nam) |
+
+- **Điểm tương tác** là một đồ vật trước công trình (quầy, bàn làm việc, thùng hàng, nệm...) mang tag + attribute; nhãn nổi ghi tên và phím. Thêm mục mới trong Config mà chưa có kiểu nhà riêng thì dùng kiểu nhà mặc định.
+- **Khu tài sản AURA** trưng bày mọi mục trong `Config.Assets` (nhà một hàng, xe trên bục) kèm bảng giá thuê, phí và Nổi tiếng; tài sản hiếm ghi "Chỉ qua đấu giá". Chỉ để ngắm, thuê vẫn ở Trụ sở. Đây là bước đầu cho trụ cột "khoe được thành quả"; tài sản của từng người chưa hiện trong thế giới (xem câu hỏi 24).
+- **Ranh giới:** tường vô hình ở mép vùng chơi 320 × 320; bên ngoài là thảm cỏ, vành rừng và đồi thấp cho có đường chân trời.
+- **Quái:** Slime Kẹo (thân thạch trong, lõi sáng, que kẹo) và Gấu Bông (đầu, tai, mõm, tay chân, miếng vá). Vẫn đứng yên, luật không đổi.
+- **Thay bằng map riêng:** đặt một thư mục `World` trong Workspace và gắn tag như bảng trong CLAUDE.md; khi đó WorldBuilder, ánh sáng và ngày đêm dựng sẵn đều không chạy.
+
+### 8b.2 Ngày đêm (chỉ hiển thị)
+
+- Giờ trời suy ra từ giờ server như lịch (6.1), nên mọi người thấy cùng một bầu trời. **Ngày game bắt đầu lúc 6 giờ sáng**; 75% đầu của ngày (7,5 phút) là ban ngày, 25% còn lại (2,5 phút) là đêm.
+- Đêm cố ý ngắn và sáng (ánh sáng môi trường cao) vì tối quá làm khó nhìn nhãn và quái. Đèn đường bật khi trời tối; bảng xếp hạng và biển AURA tự sáng.
+- **Không ảnh hưởng luật chơi**: lớp học, thuế, sự kiện vẫn theo ngày và chu kỳ như cũ.
+
+### 8b.3 Giao diện
+
+- HUD là một cột thẻ ở góc trên phải (góc trái là cửa sổ chat; danh sách người chơi mặc định của Roblox được tắt vì game có bảng xếp hạng riêng): ví (tiền, hạng, tài sản ròng, Nổi tiếng), thông tin (ngày, mùa, AURA, nút Hồ sơ), nhiệm vụ hướng dẫn, chỉ số (lưới 2 cột), kỹ năng (bấm tiêu đề để thu gọn).
+- Toàn bộ UI co theo chiều cao màn hình: tỉ lệ = cao / 720, trong khoảng 0,62–1,15; màn hình thấp hơn 640 thì kỹ năng thu gọn sẵn.
+- Trạng thái Đấu trường hiện thành dải ở giữa phía trên. Bốn cửa sổ dùng chung thanh tiêu đề, mỗi cửa sổ một màu nhấn (cửa hàng xanh dương, xếp hạng vàng, AURA tím, hồ sơ xanh lá).
+
+### 8b.4 Hướng dẫn người mới
+
+Sáu bước, làm **theo thứ tự**, mỗi bước xong có toast và HUD hiện bước kế:
+
+| Bước | Việc | Tính khi |
+| --- | --- | --- |
+| 1 | Làm một lượt việc | có giao dịch lý do `job` |
+| 2 | Mua một món ở cửa hàng | giao dịch `shop` |
+| 3 | Nghỉ ở một trạm miễn phí | dùng trạm thành công (hết cooldown) |
+| 4 | Học một buổi | giao dịch `school` |
+| 5 | Hạ một con quái | giao dịch `monster` |
+| 6 | Ghé Trụ sở AURA | mở cửa sổ AURA |
+
+- **Không có phần thưởng** (tiền, XP hay Nổi tiếng): hướng dẫn chỉ chỉ đường, giữ trụ cột bình đẳng xuất phát.
+- Tiến độ (`data.Guide.Step`) chỉ server ghi, **giữ qua các mùa** (người cũ không phải làm lại). Người chơi có dữ liệu từ trước v0.6 bắt đầu ở bước 1.
+- Làm sai thứ tự không tính; ví dụ hạ quái trước khi học thì sau đó vẫn phải hạ thêm một con ở bước 5.
+
+### 8b.5 Nổi tiếng trên bảng tên
+
+Bảng tên trên đầu nhân vật có thêm dòng "Nổi tiếng N" (ẩn khi N = 0), cập nhật ngay khi mua đồ, thuê, trả hoặc bị thu hồi tài sản. Đây là câu trả lời tối thiểu cho câu hỏi 7: Nổi tiếng trở thành thứ người khác nhìn thấy, chưa mở khóa quyền lợi nào.
+
+### 8b.6 Hạn chế đã biết của v0.6
+
+- *(v0.7 đã thêm âm thanh và số bay, xem 8c.)* Chưa có nhạc nền và hoạt ảnh làm việc.
+- Không vào được bên trong công trình (nhà là khối đặc, tương tác ở mặt tiền).
+- Chưa đo hiệu năng trên máy yếu / điện thoại; map khoảng vài nghìn khối tĩnh.
+- Hướng dẫn chưa có mũi tên chỉ đường trong thế giới, chỉ có chữ kèm phương hướng.
+
+## 8c. v0.7 — Quái di chuyển, phản hồi tức thời, hồ sơ công khai (đã triển khai)
+
+Số liệu ở `Config.Combat` (AggroRadius, LeashRadius, StopDistance), `Config.Monsters[...].MoveSpeed`, `Config.Sounds`, `Config.Effects`. Code: `CombatService`, `Util/MonsterModel`, `ReplicationService:Effect`, `SeasonService:GetPublicProfile`, client `Effects` và `UI/ProfileWindow`.
+
+### 8c.1 Quái di chuyển (trả lời một phần câu hỏi 20)
+
+| Thông số | Giá trị |
+| --- | --- |
+| Tầm phát hiện (tính từ chỗ xuất hiện) | 24 studs |
+| Xa chỗ xuất hiện tối đa | 7 studs |
+| Dừng khi còn cách mục tiêu | 5 studs |
+| Tốc độ Slime Kẹo / Gấu Bông | 7 / 4,5 studs mỗi giây |
+
+- Mỗi tick (0,5 giây) quái chọn người chơi còn sống gần chỗ xuất hiện nhất trong tầm phát hiện và trượt một bước về phía họ; không còn ai thì quay về. `MoveSpeed` bỏ trống hoặc bằng 0 thì quái đứng yên như trước.
+- Dây xích ngắn (7 studs) là có chủ ý: người chơi luôn thoát được bằng cách lùi ra, quái không kéo nhau ra khỏi bãi, và tầm đánh 11 studs của quái vẫn như cũ nên độ khó tăng nhẹ chứ không đổi cân bằng thu nhập.
+- Tầm đánh của cả hai bên tính theo vị trí hiện tại của quái. Thưởng, chia thưởng, trần tiền không đổi.
+- Còn mở: quái mạnh dần / thưởng theo cấp bãi (câu hỏi 20), né tránh và vũ khí (câu hỏi 19).
+
+### 8c.2 Số bay và âm thanh
+
+- Server gửi `Effect(kind, value, position?)` cho **riêng** người chơi: `money` (mọi giao dịch của EconomyService, có dấu), `hit` (đòn mình đánh trúng quái hoặc đối thủ PvP, kèm vị trí), `hurt` (mình bị quái hoặc đối thủ đánh).
+- Client vẽ số bay và phát âm thanh; bỏ lỡ hiệu ứng không ảnh hưởng dữ liệu vì trạng thái thật vẫn đi qua snapshot. Tối đa 12 số bay cùng lúc.
+- Âm thanh dùng file có sẵn trong client Roblox nên không phụ thuộc kiểm duyệt asset. Toast loại lên cấp và cảnh báo có tiếng riêng. Nút trên HUD tắt toàn bộ âm thanh (chỉ trong phiên chơi, chưa lưu).
+- **Nhạc nền:** có sẵn trình phát lần lượt các bài trong `Config.Sounds.Music.Tracks`, mặc định để trống vì cần id audio mà chủ game có quyền dùng.
+
+### 8c.3 Hồ sơ công khai
+
+- Cửa sổ Hồ sơ liệt kê người chơi cùng máy chủ; "Xem" gọi `GetPlayerProfile(userId)`.
+- **Công khai:** tên, danh hiệu đang gắn và mọi danh hiệu, tài sản ròng, hạng, Nổi tiếng, thành tích PvP mùa này, tài sản ròng cao nhất, tên tài sản đang thuê, tên đồ sở hữu.
+- **Không công khai:** tiền mặt, chỉ số, kỹ năng, lịch sử các mùa, tiến độ hướng dẫn.
+- Chỉ xem được người **đang online cùng máy chủ** (server không đọc DataStore theo yêu cầu của client), 4 lần / 10 giây.
+- Đây là bước tiếp theo cho trụ cột "khoe được thành quả" và câu hỏi 7, 24: tài sản thuê giờ là thứ người khác xem được. Tài sản vẫn chưa hiện thành vật thể riêng của từng người trong thế giới.
 
 ## 9. Ràng buộc nội dung (Roblox Community Standards)
 
@@ -482,7 +583,7 @@ Số liệu ở `Config.Pvp`, `Config.Season`. Code: `PvpService`, `SeasonServic
 4. **Xuất phát thật sự công bằng?** *(Đã làm: thưởng XP bắt kịp, xem 8.2.)* Còn mở: mức +10%/tuần, tối đa +50% trong 3 giờ có đủ không, có nên giảm học phí cho người vào muộn?
 5. **Cân bằng nghề.** Hai nghề hiện chỉ khác lương/chi phí. Làm sao để mỗi nghề có "cá tính" (rủi ro, nhịp, tương tác xã hội) thay vì chỉ là con số?
 6. **Tương tác người chơi.** *(Đã làm: làm ca chung, xem 4.6.)* Còn mở: thương mại giữa người chơi (cần giải quyết đa tài khoản trước) và hội nhóm.
-7. **Giá trị của Nổi tiếng.** Hiện chỉ là con số hiển thị. Nổi tiếng nên mở khóa gì (cửa hàng cao cấp, nghề, vị trí trên bảng) mà không tạo lợi thế kiếm tiền quá lớn?
+7. **Giá trị của Nổi tiếng.** *(Đã làm một phần: hiện trên bảng tên, xem 8b.5.)* Ngoài ra vẫn chỉ là con số hiển thị. Nổi tiếng nên mở khóa gì (cửa hàng cao cấp, nghề, vị trí trên bảng) mà không tạo lợi thế kiếm tiền quá lớn?
 8. **Nổi tiếng và đồ thuê.** Với v0.3, nhà/xe thuê có cộng Nổi tiếng không? Nếu đồ thuê bị thu hồi thì Nổi tiếng giảm lại, có gây cảm giác bị phạt quá nặng không?
 9. **Cơ chế thu hồi.** Ân hạn bao lâu là hợp lý? Có cho "cứu" bằng khoản vay từ AURA (có lãi) hay không?
 10. **Thuế tính trên gì.** Tài sản ròng (khuyến khích chi tiêu) hay thu nhập (khuyến khích tích lũy)? Người chơi cố ý "giấu" tài sản bằng cách mua đồ sở hữu vĩnh viễn thì xử lý ra sao?
@@ -495,7 +596,7 @@ Số liệu ở `Config.Pvp`, `Config.Season`. Code: `PvpService`, `SeasonServic
 17. **Tên game.** "Equal Social" chỉ là tên tạm.
 18. **Trần tiền từ quái ($5.000/giờ).** Nghề không có trần nên trần này chỉ chặn quái thành nguồn thu vô hạn. Con số phù hợp là bao nhiêu? Có nên đặt trần chung cho mọi nguồn thu thay vì riêng quái?
 19. **Điều khiển đánh quái.** Hiện chỉ nhấn E nên "kỹ năng điều khiển" gần như không có. Có đáng làm vũ khí/né tránh (Tool, hoạt ảnh) hay giữ đơn giản và để chỉ số/kỹ năng quyết định?
-20. **Quái đứng yên và thưởng cố định.** Người chơi Lv cao hạ quái trong 1–3 đòn. Cần quái mạnh dần, quái di chuyển hoặc thưởng tăng theo cấp bãi luyện tập?
+20. **Quái đứng yên và thưởng cố định.** *(Đã làm một phần: quái đuổi theo trong phạm vi ngắn, xem 8c.1.)* Người chơi Lv cao hạ quái trong 1–3 đòn. Cần quái mạnh dần, quái di chuyển hoặc thưởng tăng theo cấp bãi luyện tập?
 21. **Học phí cao ở level cao.** Lv20 tốn ≈ $25.640 qua trường học, làm nghề thì miễn phí nhưng chậm hơn khoảng 2 lần. Đây có phải đánh đổi mong muốn, hay cần giảm hệ số học phí?
 22. **Lịch lớp học.** Lớp chỉ mở 3–4 ngày/tuần (70 phút thực/tuần). Người chơi vào sai ngày có thấy bị chặn không? Có cần hiện đếm ngược tới ngày lớp mở?
 23. **Gian lận bảng xếp hạng.** Hiện chỉ ghi cảnh báo. Khi nào cần cơ chế gỡ người chơi khỏi bảng hoặc khoá tài khoản nghi vấn?

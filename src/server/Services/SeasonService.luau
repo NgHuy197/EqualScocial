@@ -25,10 +25,16 @@ local Validate = require(script.Parent.Parent.Util.Validate)
 type PlayerData = Types.PlayerData
 
 local GetProfile = Remotes.Function("GetProfile")
+local GetPlayerProfile = Remotes.Function("GetPlayerProfile")
 
 local services: Types.Services = {}
 local profileLimiter =
 	RateLimiter.new(Config.RateLimits.GetProfile.Calls, Config.RateLimits.GetProfile.Window)
+
+local publicLimiter = RateLimiter.new(
+	Config.RateLimits.GetPlayerProfile.Calls,
+	Config.RateLimits.GetPlayerProfile.Window
+)
 
 local SeasonService = {}
 
@@ -49,6 +55,29 @@ function SeasonService:Start()
 		end)
 		if not ok then
 			warn(`[SeasonService] Lỗi dựng hồ sơ: {tostring(view)}`)
+			return nil
+		end
+		return view
+	end
+
+	-- Hồ sơ công khai của một người đang ở cùng máy chủ. Tham số từ client: kiểm tra kiểu, chỉ nhận
+	-- UserId của người đang online (không đọc DataStore theo yêu cầu của client).
+	GetPlayerProfile.OnServerInvoke = function(player: Player, userId: any)
+		if not Validate.isPlayer(player) or not publicLimiter:Allow(player) then
+			return nil
+		end
+		if not Validate.isFiniteNumber(userId) or userId % 1 ~= 0 then
+			return nil
+		end
+		local target = Players:GetPlayerByUserId(userId)
+		if not target then
+			return nil
+		end
+		local ok, view = pcall(function()
+			return self:GetPublicProfile(target)
+		end)
+		if not ok then
+			warn(`[SeasonService] Lỗi dựng hồ sơ công khai: {tostring(view)}`)
 			return nil
 		end
 		return view
@@ -149,6 +178,46 @@ function SeasonService:GetProfile(player: Player): Types.ProfileView?
 		BoostSecondsLeft = self:GetBoostSecondsLeft(data),
 		Cosmetics = services.Cosmetics:GetViews(player),
 		EquippedTitle = data.Cosmetics.Title,
+	}
+end
+
+-- Hồ sơ công khai: chỉ thứ người chơi muốn khoe (hạng, Nổi tiếng, PvP, danh hiệu, tài sản, đồ).
+-- KHÔNG có tiền mặt, chỉ số, kỹ năng, lịch sử mùa hay tiến độ hướng dẫn.
+function SeasonService:GetPublicProfile(target: Player): Types.PublicProfileView?
+	local data = services.Data:Get(target)
+	if not data then
+		return nil
+	end
+	local assets: { string } = {}
+	for assetId in data.Assets do
+		local def = Config.Assets[assetId]
+		if def then
+			table.insert(assets, def.Name)
+		end
+	end
+	table.sort(assets)
+	local items: { string } = {}
+	for _, shop in Config.Shops do
+		for _, item in shop.Items do
+			if item.Kind == "permanent" and data.Owned[item.Id] then
+				table.insert(items, item.Name)
+			end
+		end
+	end
+	table.sort(items)
+	return {
+		UserId = target.UserId,
+		Name = target.DisplayName,
+		Fame = services.Shop:GetFame(target) + services.Assets:GetFame(target),
+		NetWorth = services.Leaderboard:GetNetWorth(target),
+		Rank = services.Leaderboard:GetRank(target),
+		SeasonName = Config.Season.Name,
+		Pvp = self:BuildSnapshot(data).Pvp,
+		PeakNetWorth = data.PeakNetWorth,
+		Titles = table.clone(data.Titles),
+		EquippedTitle = data.Cosmetics.Title,
+		Assets = assets,
+		Items = items,
 	}
 end
 

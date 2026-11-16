@@ -29,6 +29,7 @@ function Toast.new(parent: Instance): Toast
 	container.AnchorPoint = Vector2.new(0.5, 1)
 	container.Position = UDim2.new(0.5, 0, 1, -96)
 	container.Size = UDim2.new(0.9, 0, 0, 280)
+	container.Active = false
 	container.BackgroundTransparency = 1
 	container.ZIndex = 10 -- luôn vẽ trên HUD và cửa sổ cửa hàng
 	container.Parent = parent
@@ -59,21 +60,41 @@ function Toast.Show(self: Toast, text: string, kind: string?)
 	item.Size = UDim2.fromScale(1, 0)
 	item.AutomaticSize = Enum.AutomaticSize.Y
 	item.BackgroundColor3 = Theme.Colors.Panel
-	item.BackgroundTransparency = 0.1
-	Theme.corner(item, 8)
-	Theme.padding(item, 8)
+	item.BackgroundTransparency = 0.05
+	Theme.corner(item, 10)
 
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = color
-	stroke.Thickness = 2
-	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	stroke.Parent = item
+	local stroke = Theme.stroke(item, color, 0.35)
+	stroke.Thickness = 1.5
 
-	local label = Theme.label(item, text, 20, Theme.Colors.Text, Theme.Fonts.Semibold)
+	-- Vạch màu bên trái cho biết loại thông báo
+	local bar = Instance.new("Frame")
+	bar.Name = "Kind"
+	bar.AnchorPoint = Vector2.new(0, 0.5)
+	bar.Position = UDim2.new(0, 7, 0.5, 0)
+	bar.Size = UDim2.new(0, 4, 1, -14)
+	bar.BackgroundColor3 = color
+	bar.BorderSizePixel = 0
+	bar.Parent = item
+	Theme.corner(bar, 2)
+
+	local label = Theme.label(item, text, 18, Theme.Colors.Text, Theme.Fonts.Semibold)
 	label.Size = UDim2.fromScale(1, 0)
 	label.AutomaticSize = Enum.AutomaticSize.Y
 	label.TextWrapped = true
-	label.TextXAlignment = Enum.TextXAlignment.Center
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	local padding = Theme.padding(label, 9)
+	padding.PaddingLeft = UDim.new(0, 20)
+	padding.PaddingRight = UDim.new(0, 14)
+
+	-- Phóng nhẹ khi xuất hiện
+	local scale = Instance.new("UIScale")
+	scale.Scale = 0.9
+	scale.Parent = item
+	TweenService:Create(
+		scale,
+		TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+		{ Scale = 1 }
+	):Play()
 
 	item.Parent = self.Container
 	table.insert(self.Active, item)
@@ -94,6 +115,7 @@ function Toast.Show(self: Toast, text: string, kind: string?)
 		TweenService:Create(item, info, { BackgroundTransparency = 1 }):Play()
 		TweenService:Create(label, info, { TextTransparency = 1 }):Play()
 		TweenService:Create(stroke, info, { Transparency = 1 }):Play()
+		TweenService:Create(bar, info, { BackgroundTransparency = 1 }):Play()
 		task.delay(FADE_SECONDS, function()
 			local index = table.find(self.Active, item)
 			if index then

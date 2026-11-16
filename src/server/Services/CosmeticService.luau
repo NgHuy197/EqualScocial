@@ -29,6 +29,8 @@ local EquipTitle = Remotes.Function("EquipTitle")
 local services: Types.Services = {}
 -- Món người chơi sở hữu (theo Game Pass); bảng yếu để người rời game tự được dọn
 local owned: { [Player]: { [string]: boolean } } = setmetatable({}, { __mode = "k" }) :: any
+-- Nổi tiếng gần nhất của mỗi người (để chỉ dựng lại bảng tên khi con số đổi)
+local fameOf: { [Player]: number } = setmetatable({}, { __mode = "k" }) :: any
 local equipLimiter =
 	RateLimiter.new(Config.RateLimits.EquipCosmetic.Calls, Config.RateLimits.EquipCosmetic.Window)
 local titleLimiter =
@@ -211,6 +213,15 @@ function CosmeticService:GetViews(player: Player): { Types.CosmeticView }
 	return views
 end
 
+-- Nổi tiếng hiện trên bảng tên (ReplicationService gọi mỗi lần dựng snapshot; chỉ dựng lại khi đổi)
+function CosmeticService:SetFame(player: Player, fame: number)
+	if fameOf[player] == fame then
+		return
+	end
+	fameOf[player] = fame
+	self:ApplyTag(player)
+end
+
 -- Dựng / cập nhật bảng tên trên nhân vật hiện tại của người chơi. Nhân vật chưa có đầu (đang dựng
 -- avatar): chờ đầu ở luồng riêng rồi thử lại đúng một lần.
 function CosmeticService:ApplyTag(player: Player, isRetry: boolean?)
@@ -221,7 +232,9 @@ function CosmeticService:ApplyTag(player: Player, isRetry: boolean?)
 	end
 	local def = Config.Cosmetics.Items[data.Cosmetics.Equipped]
 	local color = if def then def.Color else Config.Cosmetics.DefaultColor
-	if NameTag.Apply(character, player.DisplayName, data.Cosmetics.Title, color) or isRetry then
+	local applied =
+		NameTag.Apply(character, player.DisplayName, data.Cosmetics.Title, color, fameOf[player])
+	if applied or isRetry then
 		return
 	end
 	task.spawn(function()

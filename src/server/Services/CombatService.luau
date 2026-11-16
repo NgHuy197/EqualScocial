@@ -47,6 +47,8 @@ type Monster = {
 	Damage: { [Player]: number }, -- tổng sát thương mỗi người đã gây
 	NextAttackAt: number, -- os.clock() quái được phép đánh lần kế
 	Slot: Slot,
+	Home: Vector3, -- vị trí thân lúc xuất hiện (tâm vùng hoạt động)
+	Position: Vector3, -- vị trí thân theo logic server (đích của lần di chuyển gần nhất)
 }
 
 type Hit = {
@@ -260,6 +262,8 @@ function CombatService:_spawn(slot: Slot)
 		Damage = {},
 		NextAttackAt = 0,
 		Slot = slot,
+		Home = handle.Body.Position,
+		Position = handle.Body.Position,
 	}
 	monsters[handle.Model] = monster
 	slot.Monster = monster
@@ -279,12 +283,64 @@ function CombatService:_tickMonsters()
 	end
 end
 
--- Quái đánh người chơi gần nhất trong tầm (nếu đã hết thời gian chờ giữa hai đòn)
+-- Điểm quái muốn tới trong tick này: tiến về người chơi gần nhất trong AggroRadius (không rời điểm
+-- xuất hiện quá LeashRadius, dừng khi còn cách StopDistance); không còn ai thì quay về chỗ cũ.
+function CombatService:GetMoveGoal(monster: Monster): Vector3
+	local cfg = Config.Combat
+	local home = monster.Home
+	local nearest: Vector3? = nil
+	local nearestDistance = cfg.AggroRadius
+	for _, player in Players:GetPlayers() do
+		local position = Validate.getRootPosition(player)
+		if position and getLiveHumanoid(player) then
+			local flat = Vector3.new(position.X - home.X, 0, position.Z - home.Z)
+			if flat.Magnitude <= nearestDistance then
+				nearest = Vector3.new(position.X, home.Y, position.Z)
+				nearestDistance = flat.Magnitude
+			end
+		end
+	end
+	if not nearest then
+		return home
+	end
+	-- Đứng yên nếu đã đủ gần mục tiêu
+	local toTarget = nearest - monster.Position
+	if toTarget.Magnitude <= cfg.StopDistance then
+		return monster.Position
+	end
+	local goal = nearest - toTarget * (cfg.StopDistance / toTarget.Magnitude)
+	local fromHome = goal - home
+	if fromHome.Magnitude > cfg.LeashRadius then
+		goal = home + fromHome * (cfg.LeashRadius / fromHome.Magnitude)
+	end
+	return goal
+end
+
+-- Dời quái một bước về phía đích (tối đa MoveSpeed x chu kỳ tick)
+function CombatService:_moveMonster(monster: Monster)
+	local speed = monster.Def.MoveSpeed or 0
+	if speed <= 0 then
+		return
+	end
+	local goal: Vector3 = self:GetMoveGoal(monster)
+	local delta = goal - monster.Position
+	local distance = delta.Magnitude
+	if distance < 0.1 then
+		return
+	end
+	local tick = Config.Combat.MonsterTickSeconds
+	local step = math.min(distance, speed * tick)
+	monster.Position += delta * (step / distance)
+	MonsterModel.MoveTo(monster.Handle, monster.Position, tick)
+end
+
+-- Quái di chuyển, rồi đánh người chơi gần nhất trong tầm (nếu đã hết thời gian chờ giữa hai đòn)
 function CombatService:_monsterAct(monster: Monster, now: number)
+	self:_moveMonster(monster)
 	if now < monster.NextAttackAt then
 		return
 	end
-	local origin = monster.Handle.Body.Position
+	local origin = monster.Position
 	local target: Player? = nil
 	local targetDistance = monster.Def.AttackRange
 	for _, player in Players:GetPlayers() do
@@ -305,6 +361,7 @@ function CombatService:_monsterAct(monster: Monster, now: number)
 		return
 	end
 	humanoid:TakeDamage(monster.Def.Damage)
+	services.Replication:Effect(target, "hurt", monster.Def.Damage)
 	lastMonsterHit[target] = { Time = now, Name = monster.Def.Name }
 	monster.NextAttackAt = now + monster.Def.AttackInterval
 end
@@ -322,7 +379,7 @@ function CombatService:_attack(player: Player, monster: Monster)
 
 	-- Prompt đã kiểm tra khoảng cách; kiểm tra lại chặt hơn bằng chính tầm đánh (dung sai nhỏ)
 	local reach = Config.Combat.PlayerAttackRange + Config.Combat.AttackRangeTolerance
-	if not Validate.isWithin(player, monster.Handle.Body.Position, reach) then
+	if not Validate.isWithin(player, monster.Position, reach) then
 		return
 	end
 
@@ -342,6 +399,7 @@ function CombatService:_attack(player: Player, monster: Monster)
 	monster.HP -= dealt
 	monster.Damage[player] = (monster.Damage[player] or 0) + dealt
 	MonsterModel.SetHealth(monster.Handle, monster.HP / monster.Def.MaxHP)
+	services.Replication:Effect(player, "hit", dealt, monster.Position)
 
 	if monster.HP <= 0 then
 		self:_kill(monster)

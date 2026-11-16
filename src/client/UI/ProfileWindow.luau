@@ -10,6 +10,7 @@
 	Client chỉ HIỂN THỊ dữ liệu server trả về.
 ]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -18,12 +19,14 @@ local Types = require(ReplicatedStorage.Shared.Types)
 local Theme = require(script.Parent.Theme)
 
 type View = Types.ProfileView
+type PublicView = Types.PublicProfileView
 
 export type Handlers = {
 	Fetch: () -> View?,
 	OnEquip: (id: string) -> (), -- "" = bỏ bảng tên màu
 	OnEquipTitle: (title: string) -> (), -- "" = gỡ danh hiệu
 	OnBuy: (gamePassId: number) -> (),
+	FetchPlayer: (userId: number) -> PublicView?, -- hồ sơ công khai của người khác trong máy chủ
 }
 
 type Fields = {
@@ -73,17 +76,18 @@ function ProfileWindow.new(parent: Instance, handlers: Handlers): ProfileWindow
 	closeButton.TextColor3 = Theme.Colors.Text
 	closeButton.Parent = root
 	Theme.corner(closeButton, 8)
+	Theme.chrome(root, title, closeButton, Theme.Colors.Good)
 
 	local status = Theme.label(root, "", 15, Theme.Colors.TextMuted)
-	status.Position = UDim2.fromOffset(16, 46)
+	status.Position = UDim2.fromOffset(18, 58)
 	status.Size = UDim2.new(1, -32, 0, 20)
 
 	local list = Instance.new("ScrollingFrame")
 	list.Name = "Content"
 	list.BackgroundTransparency = 1
 	list.BorderSizePixel = 0
-	list.Position = UDim2.fromOffset(12, 70)
-	list.Size = UDim2.new(1, -24, 1, -82)
+	list.Position = UDim2.fromOffset(12, 82)
+	list.Size = UDim2.new(1, -24, 1, -94)
 	list.CanvasSize = UDim2.new()
 	list.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	list.ScrollBarThickness = 6
@@ -292,6 +296,28 @@ function ProfileWindow._render(self: ProfileWindow, view: View)
 		end
 	end
 
+	-- Người chơi khác trong máy chủ: bấm "Xem" để xem hồ sơ công khai của họ
+	self:_line(Config.Text.ProfileOthers, 14, Theme.Colors.TextMuted, Theme.Fonts.Bold)
+	local others = 0
+	for _, other in Players:GetPlayers() do
+		if other ~= Players.LocalPlayer then
+			others += 1
+			local userId = other.UserId
+			self:_buttonRow(
+				`Player{userId}`,
+				other.DisplayName,
+				Theme.Colors.Text,
+				Config.Text.ProfileView,
+				function()
+					self:OpenPlayer(userId)
+				end
+			)
+		end
+	end
+	if others == 0 then
+		self:_line(Config.Text.ProfileNoOthers, 15, Theme.Colors.TextMuted)
+	end
+
 	self:_line(Config.Text.ProfileHistory, 14, Theme.Colors.TextMuted, Theme.Fonts.Bold)
 	if #view.History == 0 then
 		self:_line(Config.Text.ProfileNoHistory, 15, Theme.Colors.TextMuted)
@@ -318,10 +344,112 @@ function ProfileWindow._render(self: ProfileWindow, view: View)
 	end
 end
 
+-- Vẽ hồ sơ công khai của một người chơi khác (chỉ đọc)
+function ProfileWindow._renderPublic(self: ProfileWindow, view: PublicView)
+	self:_clear()
+	self.Status.Text = ""
+	self:_buttonRow(
+		"Back",
+		Config.Text.ProfileBack,
+		Theme.Colors.TextMuted,
+		Config.Text.ProfileBackButton,
+		function()
+			self:Open()
+		end
+	)
+	self:_line(
+		string.format(Config.Text.PublicTitle, view.Name),
+		22,
+		Theme.Colors.Text,
+		Theme.Fonts.Bold
+	)
+	if view.EquippedTitle ~= "" then
+		self:_line(view.EquippedTitle, 16, Theme.Colors.Fame, Theme.Fonts.Semibold)
+	end
+	local rank = view.Rank
+	local rankText = if rank
+		then string.format(Config.Text.HudRank, rank)
+		else string.format(Config.Text.HudRankNone, Config.Leaderboard.TopCount)
+	self:_line(
+		string.format(
+			Config.Text.PublicWealth,
+			Format.money(view.NetWorth),
+			rankText,
+			Format.number(view.Fame)
+		),
+		16,
+		Theme.Colors.Money
+	)
+	local pvp = view.Pvp
+	self:_line(
+		string.format(
+			Config.Text.ProfileSeason,
+			view.SeasonName,
+			pvp.Rating,
+			pvp.Wins,
+			pvp.Losses,
+			pvp.Draws
+		),
+		16,
+		Theme.Colors.Text
+	)
+	self:_line(
+		string.format(Config.Text.ProfilePeak, Format.money(view.PeakNetWorth)),
+		15,
+		Theme.Colors.TextMuted
+	)
+
+	local function list(header: string, names: { string }, color: Color3)
+		self:_line(header, 14, Theme.Colors.TextMuted, Theme.Fonts.Bold)
+		if #names == 0 then
+			self:_line(Config.Text.PublicNone, 15, Theme.Colors.TextMuted)
+		else
+			self:_line(table.concat(names, " · "), 16, color, Theme.Fonts.Semibold, true)
+		end
+	end
+	list(Config.Text.PublicAssets, view.Assets, Theme.Colors.Aura)
+	list(Config.Text.PublicItems, view.Items, Theme.Colors.Text)
+	-- Danh hiệu: mới nhất lên trước
+	local titles: { string } = {}
+	for i = #view.Titles, 1, -1 do
+		table.insert(titles, view.Titles[i])
+	end
+	list(Config.Text.ProfileTitles, titles, Theme.Colors.Fame)
+end
+
+-- Mở hồ sơ công khai của người chơi có `userId` (đang ở cùng máy chủ)
+function ProfileWindow.OpenPlayer(self: ProfileWindow, userId: number)
+	self:_clear()
+	self.Status.Text = Config.Text.ProfileLoading
+	Theme.show(self.Root)
+	self.Token += 1
+	local token = self.Token
+	task.spawn(function()
+		local view = self.Handlers.FetchPlayer(userId)
+		if token ~= self.Token or not self.Root.Visible then
+			return
+		end
+		if view then
+			self:_renderPublic(view)
+		else
+			self.Status.Text = Config.Text.PublicGone
+			self:_buttonRow(
+				"Back",
+				Config.Text.ProfileBack,
+				Theme.Colors.TextMuted,
+				Config.Text.ProfileBackButton,
+				function()
+					self:Open()
+				end
+			)
+		end
+	end)
+end
+
 function ProfileWindow.Open(self: ProfileWindow)
 	self:_clear()
 	self.Status.Text = Config.Text.ProfileLoading
-	self.Root.Visible = true
+	Theme.show(self.Root)
 	self.Token += 1
 	local token = self.Token
 	task.spawn(function()

@@ -54,6 +54,7 @@ local function record(player: Player, delta: number, reason: string, balance: nu
 		print(`[Economy] {player.Name} {sign}{delta} ({reason}) -> {balance}`)
 	end
 	services.Replication:MarkDirty(player)
+	services.Replication:Effect(player, "money", delta)
 	local transaction: Transaction = {
 		Player = player,
 		Delta = delta,

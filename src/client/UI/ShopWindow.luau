@@ -152,17 +152,18 @@ function ShopWindow.new(
 	closeButton.TextColor3 = Theme.Colors.Text
 	closeButton.Parent = root
 	Theme.corner(closeButton, 8)
+	Theme.chrome(root, title, closeButton)
 
 	local moneyLabel = Theme.label(root, "", 18, Theme.Colors.Money, Theme.Fonts.Semibold)
-	moneyLabel.Position = UDim2.fromOffset(16, 48)
+	moneyLabel.Position = UDim2.fromOffset(18, 58)
 	moneyLabel.Size = UDim2.new(1, -32, 0, 24)
 
 	local list = Instance.new("ScrollingFrame")
 	list.Name = "Items"
 	list.BackgroundTransparency = 1
 	list.BorderSizePixel = 0
-	list.Position = UDim2.fromOffset(12, 82)
-	list.Size = UDim2.new(1, -24, 1, -94)
+	list.Position = UDim2.fromOffset(12, 90)
+	list.Size = UDim2.new(1, -24, 1, -102)
 	list.CanvasSize = UDim2.new()
 	list.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	list.ScrollBarThickness = 6
@@ -350,7 +351,7 @@ function ShopWindow.Open(self: ShopWindow, shopId: string, state: Types.Snapshot
 	local root = getRootPart()
 	self.Anchor = findAnchor(shopId)
 	self.FallbackPosition = if root then root.Position else nil
-	self.Root.Visible = true
+	Theme.show(self.Root)
 
 	-- Theo dõi khoảng cách: đi xa thì tự đóng
 	self.Elapsed = 0

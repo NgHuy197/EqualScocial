@@ -10,6 +10,13 @@
 			}
 		},
 
+		"Lighting": {
+			"$className": "Lighting",
+			"$properties": {
+				"Technology": "Future"
+			}
+		},
+
 		"ServerScriptService": {
 			"$className": "ServerScriptService",
 			"Server": {

@@ -22,11 +22,17 @@ out = pathlib.Path(sys.argv[3]) if len(sys.argv) > 3 else root / "tests" / "out"
 body = body_path.read_text(encoding="utf-8")
 
 # Chỉ nạp server + shared. ProfileStore (Vendor) được harness thay bằng bản giả có khóa phiên.
+# server/World/* (dựng map) dùng Instance thật như WorldBuilder nên cũng không nạp.
 skip_names = {"init.server.luau", "init.client.luau", "WorldBuilder.luau"}
 entries = []
 for path in sorted(src_dir.rglob("*.luau")):
     rel = path.relative_to(src_dir).as_posix()
-    if rel.startswith("client/") or rel.startswith("server/Vendor/") or path.name in skip_names:
+    if (
+        rel.startswith("client/")
+        or rel.startswith("server/Vendor/")
+        or rel.startswith("server/World/")
+        or path.name in skip_names
+    ):
         continue
     key = rel[: -len(".luau")]
     text = path.read_text(encoding="utf-8")

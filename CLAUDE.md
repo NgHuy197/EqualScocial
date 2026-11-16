@@ -8,7 +8,7 @@ Game Roblox nhiều người chơi, viết bằng Luau + Rojo. **Mọi chữ hi�
 
 Một xã hội giống ngoài đời, nhưng mọi người chơi **xuất phát như nhau**: cùng tiền ($100), cùng chỉ số, không gia thế, không bệnh tật. Người chơi cạnh tranh công bằng bằng cách học skill, làm nghề, luyện tập, đấu với nhau rồi mua tài sản để khoe. Mọi tài sản thuộc sở hữu và do siêu máy tính AI **AURA** cai quản. Lối chơi giống Stardew Valley + The Sims, nhưng đề cao tương tác và cạnh tranh giữa người chơi.
 
-Trạng thái: **v0.5** (v0.4 + làm ca chung, thu hồi tài sản hiếm khi vắng mặt, bắt kịp giữa mùa, cosmetic Game Pass; xem GDD mục 4, 6, 7, 8). Cá cược PvP đã bị bỏ vì Roblox cấm cờ bạc mô phỏng (GDD 8.0).
+Trạng thái: **v0.7** (v0.6 + quái di chuyển, số bay và âm thanh, hồ sơ công khai của người chơi khác; xem GDD mục 4, 6, 7, 8, 8b, 8c). Cá cược PvP đã bị bỏ vì Roblox cấm cờ bạc mô phỏng (GDD 8.0).
 
 ## Lệnh
 
@@ -41,24 +41,26 @@ Sau mỗi thay đổi code, tối thiểu phải qua: `stylua --check src`, `sel
 
 ```
 src/shared  → ReplicatedStorage.Shared                       Config, Remotes, Format, Types, Calendar
-src/server  → ServerScriptService.Server (init.server.luau)  Services/, Util/, Vendor/, WorldBuilder
-src/client  → StarterPlayer.StarterPlayerScripts.Client      init.client.luau, UI/
+src/server  → ServerScriptService.Server (init.server.luau)  Services/, Util/, Vendor/, World/, WorldBuilder
+src/client  → StarterPlayer.StarterPlayerScripts.Client      init.client.luau, Ambience, UI/
 ```
 
 - `Config.luau`: **toàn bộ** số liệu cân bằng và câu chữ hiển thị (`Config.Text`).
 - `Remotes.luau`: danh sách RemoteEvent/RemoteFunction. Server gọi `Remotes.Init()` một lần; nơi khác dùng `Remotes.Event(name)` / `Remotes.Function(name)`.
 - `Calendar.luau`: lịch trong game thuần tính toán từ giờ server (`workspace:GetServerTimeNow()`), dùng chung server (lớp mở/đóng) và client (HUD).
-- `Services/*` (thứ tự khởi động trong `init.server.luau`): `DataService`, `EconomyService`, `StatsService`, `SkillService`, `JobService`, `StationService`, `ShopService`, `SchoolService`, `CombatService`, `AssetService` (thuê/trả tài sản, phí duy trì, thu hồi), `AuctionService` (đấu giá tài sản hiếm, tiền khóa), `AuraService` (chu kỳ, thuế, sự kiện, lạm phát, Báo cáo), `SeasonService` (thông báo sang mùa, phần Season của snapshot), `PvpService` (hàng chờ, trận 1v1, Elo), `CosmeticService` (Game Pass bảng tên màu, gắn danh hiệu, bảng tên trên đầu), `LeaderboardService`, `ReplicationService`. `DataService` có thêm `OnReleasing(cb)` (chạy đồng bộ trước khi dữ liệu người rời game bị gỡ) và `TakeRollover(player)`.
+- `Services/*` (thứ tự khởi động trong `init.server.luau`): `DataService`, `EconomyService`, `StatsService`, `SkillService`, `JobService`, `StationService`, `ShopService`, `SchoolService`, `CombatService`, `AssetService` (thuê/trả tài sản, phí duy trì, thu hồi), `AuctionService` (đấu giá tài sản hiếm, tiền khóa), `AuraService` (chu kỳ, thuế, sự kiện, lạm phát, Báo cáo), `SeasonService` (thông báo sang mùa, phần Season của snapshot), `PvpService` (hàng chờ, trận 1v1, Elo), `CosmeticService` (Game Pass bảng tên màu, gắn danh hiệu, bảng tên trên đầu kèm Nổi tiếng), `GuideService` (nhiệm vụ hướng dẫn người mới, không thưởng), `LeaderboardService`, `ReplicationService`. `DataService` có thêm `OnReleasing(cb)` (chạy đồng bộ trước khi dữ liệu người rời game bị gỡ) và `TakeRollover(player)`.
 - `Vendor/ProfileStore`: thư viện ProfileStore (MAD STUDIO, Apache 2.0) giữ **nguyên bản gốc**, không sửa; nguồn và commit ghi trong `SOURCE.txt`. Được loại khỏi StyLua (`.styluaignore`), Selene (`exclude` trong `selene.toml`) và type-check (`--ignore`). Chỉ `DataService` require nó.
 - `Util/*`: `Validate` (kiểm tra dữ liệu/khoảng cách), `RateLimiter`, `Prompts` (gắn ProximityPrompt theo tag có cooldown + kiểm tra khoảng cách phía server), `Describe` (chuỗi mô tả nghề/điều kiện dùng chung), `MonsterModel` (dựng quái và thanh máu), `BoardGui` (vẽ chữ lên bảng xếp hạng 3D), `AssetRegistry` (kho tài sản hiếm toàn cầu trong DataStore, nhận/trả nguyên tử bằng `UpdateAsync`; Studio không API thì dùng bản cục bộ), `Season` (logic thuần sang mùa: lưu lịch sử, trao danh hiệu, reset về template), `NameTag` (dựng BillboardGui bảng tên trên đầu nhân vật; harness thay bằng bản giả).
 - Client `UI/*`: `Theme`, `HUD`, `Toast`, `ShopWindow`, `LeaderboardWindow`, `AuraWindow` (3 tab Tài sản / Đấu giá / Báo cáo), `ProfileWindow` (Hồ sơ: danh hiệu + nút gắn, bảng tên màu + nút mua/dùng, lịch sử mùa, thưởng bắt kịp; mở bằng nút trên HUD hoặc phím P).
-- `WorldBuilder`: dựng map placeholder nếu Workspace chưa có `World`; map thật chỉ cần gắn **tag + attribute** (xem bên dưới).
+- `WorldBuilder` + `World/*`: dựng sẵn thị trấn bằng code nếu Workspace chưa có `World`. `World/Kit` (khối, nêm, trụ, biển chữ, nhãn nổi, bảng màu), `World/Props` (cây, đèn, ghế, hàng rào, xe, nhà mẫu), `World/Buildings` (một kiểu nhà cho mỗi id nghề / lớp / trạm / cửa hàng, id lạ dùng kiểu `generic`; hàm dựng TRẢ VỀ part làm điểm tương tác để WorldBuilder gắn tag), `World/Landmarks` (quảng trường, cổng chào, bảng xếp hạng, Trụ sở AURA, Đấu trường, Bệnh xá, Bãi luyện tập, Khu tài sản), `World/Environment` (ánh sáng, khí quyển, mây). Map tự làm chỉ cần gắn **tag + attribute** (xem bên dưới).
+- Client `Effects`: số bay và âm thanh theo RemoteEvent `Effect(kind, value, position?)` do `ReplicationService:Effect` gửi (kind: `money` / `hit` / `hurt`); chỉ để nhìn và nghe, trạng thái thật vẫn đi qua snapshot. Âm thanh và nhạc cấu hình ở `Config.Sounds`.
+- Client `Ambience`: chu kỳ ngày đêm và đèn đường theo `Calendar.GetClockTime` (chỉ hiển thị; chỉ chạy khi server bật attribute `ES_DayNight` trên Lighting, tức là đang dùng map dựng sẵn).
 
 ## Luật kiến trúc (BẮT BUỘC)
 
 1. **Server-authoritative.** Mọi tiền, chỉ số, giao dịch, XP, sở hữu đều tính và lưu trên server. Client chỉ hiển thị và gửi yêu cầu. **Không bao giờ tin dữ liệu client gửi lên.**
 2. **Chỉ `EconomyService` được đổi tiền**, qua `Add`, `TrySpend`, `TakePercent`. Mỗi hàm bắt buộc có `reason` (dùng `Config.Reasons`) để AURA sau này đánh thuế và ghi log. Không bao giờ ghi `data.Money` ở nơi khác.
-3. **Mọi con số cân bằng nằm trong `Config.luau`** (giá, lương, tốc độ tụt chỉ số, khoảng cách, cooldown, rate-limit...). Thêm nghề / trạm / món hàng mới chỉ cần sửa Config; WorldBuilder tự xếp khối placeholder cho nghề, trạm, cửa hàng mới.
+3. **Mọi con số cân bằng nằm trong `Config.luau`** (giá, lương, tốc độ tụt chỉ số, khoảng cách, cooldown, rate-limit...). Thêm nghề / trạm / món hàng mới chỉ cần sửa Config; WorldBuilder tự dựng công trình (kiểu `generic` nếu chưa vẽ kiểu riêng trong `World/Buildings`). Hằng số thuần hình dáng (kích thước cửa sổ, màu mái...) được phép nằm trong `World/*`.
 4. **Pattern service.** Mỗi service là một ModuleScript có `Init(services)` và `Start()`. `init.server.luau` require tất cả, gọi `Init` cho tất cả, dựng world, rồi mới gọi `Start` cho tất cả, theo thứ tự cố định trong `SERVICE_ORDER`. **Không require chéo giữa các service**: gọi nhau qua bảng `services` (ví dụ `services.Economy:Add(...)`). `Init` chỉ lưu tham chiếu/chuẩn bị dữ liệu; kết nối sự kiện và vòng lặp nền đặt trong `Start`.
 5. **Bảo mật Remote.** Mọi handler RemoteEvent/RemoteFunction phải: kiểm tra kiểu và độ dài tham số (`Validate`), kiểm tra khoảng cách phía server, và rate-limit (`RateLimiter`, cấu hình ở `Config.RateLimits`). Handler RemoteFunction bọc `pcall` và trả thông báo lỗi tiếng Việt.
 6. **ProximityPrompt cũng phải có cooldown phía server.** Luôn gắn qua `Prompts.BindTag`, không tự `Instance.new("ProximityPrompt")` rải rác. Cooldown mặc định ≈ `HoldDuration * Config.Prompts.CooldownFactor`.
@@ -81,7 +83,7 @@ src/client  → StarterPlayer.StarterPlayerScripts.Client      init.client.luau,
 - Tag CollectionService và attribute lấy từ `Config.Tags` / `Config.Attributes`, không gõ chuỗi trực tiếp.
 - Tham số `reason` của EconomyService lấy từ `Config.Reasons`.
 
-## Thay map placeholder bằng model thật
+## Thay map dựng sẵn bằng map tự làm
 
 Model/Part đặt trong Workspace, có ít nhất một `BasePart` (prompt gắn vào `PrimaryPart` hoặc part đầu tiên), rồi:
 
@@ -104,7 +106,7 @@ Tag `ES_Monster` do `CombatService` tự gắn lên quái đang sống, không g
 
 Chạy trong Studio (Play, hoặc Test → 2 người chơi). Để test nhanh theo thời gian, đặt tạm `Config.Stats.TimeScale = 60` (nhớ trả về `1`).
 
-1. **Khởi động**: Output có `[WorldBuilder] Đã dựng map placeholder: 4 nghề, 4 lớp học, 3 trạm, 2 cửa hàng, 6 điểm xuất hiện quái` và `[EqualSocial] Server đã sẵn sàng`, không có lỗi đỏ. HUD hiện **$100**, Nổi tiếng 0, "Tài sản ròng: $100 · Hạng #1", "Hôm nay: Thứ …", 6 thanh chỉ số (Độ no/Năng lượng/Sạch sẽ 100, Hạnh phúc 70, Căng thẳng 10, Sức khỏe 100), 4 kỹ năng Lv.0.
+1. **Khởi động**: Output có `[WorldBuilder] Đã dựng map: 4 nghề, 4 lớp học, 3 trạm, 2 cửa hàng, 6 điểm xuất hiện quái` và `[EqualSocial] Server đã sẵn sàng`, không có lỗi đỏ. HUD hiện **$100**, chip "Hạng #1", "Tài sản ròng: $100", "Nổi tiếng: 0", "Hôm nay: Thứ …", 6 thanh chỉ số (Độ no/Năng lượng/Sạch sẽ 100, Hạnh phúc 70, Căng thẳng 10, Sức khỏe 100), 4 kỹ năng Lv.0.
 2. **Làm việc nhận tiền**: giữ E 4 giây ở *Bốc vác kho hàng* → +$12 (tiền $112), +10 XP Sức mạnh, Năng lượng −6, Độ no −4, Sạch sẽ −5, Căng thẳng +3; có toast. *Pha chế cà phê* (3 giây) → +$10, XP Giao tiếp.
 3. **Lên cấp & lương**: làm 5 lượt cùng một nghề → toast "lên cấp 1"; lượt kế lương = round(12 × 1.1) = $13.
 4. **Quá mệt**: hạ Năng lượng dưới 15 (làm liên tục ~15 lượt) → giữ phím báo "quá mệt", không nhận tiền/XP.
@@ -157,6 +159,21 @@ Chạy trong Studio (Play, hoặc Test → 2 người chơi). Để test nhanh t
 33f. **Bắt kịp**: đặt tạm `Config.Season.StartsAt` lùi 3 tuần → vào game có toast "+30% XP trong 3 giờ chơi đầu"; một lượt Bốc vác cho 13 XP thay vì 10; Hồ sơ hiện dòng thưởng. Trả `StartsAt` về như cũ.
 33g. **Tài sản hiếm vắng mặt** (cần publish, hoặc kiểm tra bằng harness): chủ không vào game quá 7 ngày và có người khác thắng đấu giá suất đó → khi chủ cũ vào lại, toast "vắng mặt quá 7 ngày", tài sản biến mất.
 
+**Checklist v0.6:**
+
+33h. **Map**: xuất hiện giữa quảng trường tròn; bốn hướng có lối lát dẫn ra dãy nghề (tây), trạm nghỉ + Trụ sở AURA (đông), cửa hàng + Đấu trường (bắc), bảng xếp hạng + trường học + Bãi luyện tập (nam). Mỗi điểm tương tác có nhãn nổi (tên + phím) phía trên quầy / bàn; không đi lọt ra ngoài mép map (tường vô hình).
+33i. **Ngày đêm**: trong một ngày game (10 phút) trời sáng 7,5 phút rồi tối 2,5 phút; khi tối đèn đường bật, bảng xếp hạng và biển AURA vẫn đọc được; HUD sang ngày mới đúng lúc trời hửng sáng. Test nhanh: đặt tạm `Config.Calendar.DayLengthSeconds = 60`.
+33j. **Hướng dẫn**: người mới thấy thẻ "NHIỆM VỤ HƯỚNG DẪN (1/6)". Làm một lượt nghề → toast "Xong một bước…", thẻ sang (2/6); lần lượt mua hàng, dùng trạm, học, hạ quái, mở Trụ sở AURA → toast hoàn thành, thẻ biến mất. Làm sai thứ tự không tính. Tiền không đổi vì hướng dẫn.
+33k. **Nổi tiếng trên bảng tên**: mua Kính râm → dưới tên trên đầu nhân vật hiện "Nổi tiếng 5"; thuê / trả tài sản thì con số đổi theo; Nổi tiếng 0 thì không có dòng này.
+33l. **Giao diện**: HUD nằm ở góc trên **phải** (không đè cửa sổ chat ở góc trái; danh sách người chơi mặc định của Roblox bị tắt). Thu nhỏ cửa sổ game → HUD co theo; bấm tiêu đề "KỸ NĂNG" để thu gọn / mở; cửa sổ Cửa hàng, Bảng xếp hạng, AURA, Hồ sơ có cùng thanh tiêu đề và phóng nhẹ khi mở; trạng thái Đấu trường hiện thành dải ở giữa phía trên.
+
+**Checklist v0.7:**
+
+33m. **Quái di chuyển**: đứng cách Slime khoảng 12 studs → quái trượt lại gần, quay mặt về phía bạn rồi đánh; chạy ra xa hơn 24 studs → quái quay về chỗ cũ. Quái không rời chỗ xuất hiện quá 7 studs.
+33n. **Số bay và âm thanh**: làm xong một lượt nghề → "+$12" xanh bay trên đầu kèm tiếng; mua hàng → "-$10" đỏ; đánh quái → "-10" vàng tại chỗ quái kèm tiếng chém; bị quái đánh → số đỏ trên đầu. Bấm nút bất kỳ có tiếng click. Nút "Âm thanh: Bật" trên HUD → "Tắt" thì im hẳn.
+33o. **Hồ sơ người khác** (Test → 2 người chơi): mở Hồ sơ (P) → mục "NGƯỜI CHƠI TRONG MÁY CHỦ" có tên người kia → "Xem" hiện hạng, Nổi tiếng, PvP, tài sản đang thuê, đồ sở hữu, danh hiệu; không có tiền mặt. "Quay lại" về hồ sơ của mình. Người kia thoát rồi mới bấm "Xem" → báo đã rời máy chủ.
+33p. **Chống gian lận v0.7**: `GetPlayerProfile:InvokeServer("abc")`, `(1.5)`, hoặc UserId không online → `nil`; hơn 4 lần / 10 giây → các lần vượt trả `nil`.
+
 **Kiểm chứng sau khi publish** (cần bạn: File → Publish to Roblox, bật *Enable Studio Access to API Services*, dùng experience dev):
 
 34. **ProfileStore**: Output có `[ProfileStore]: Roblox API services available - data will be saved`, không có warn "KHÔNG LƯU". Kiếm tiền, mua Kính râm → Stop → Play: còn nguyên (mục 9).
@@ -173,6 +190,12 @@ Chạy trong Studio (Play, hoặc Test → 2 người chơi). Để test nhanh t
 - v0.2 đã smoke-test trong Studio thật (học ở Xưởng, lớp đóng cửa, đánh quái, thua trận → Bệnh xá, panel bảng xếp hạng, giới hạn `GetLeaderboard`). **Chưa kiểm chứng OrderedDataStore thật** (cần publish place).
 - v0.3 đã smoke-test trong Studio thật (mở Trụ sở, thuê Phòng trọ bằng chuột, phí duy trì, đặt giá và chốt phiên Xe thể thao, tab Báo cáo) với registry cục bộ; logic chu kỳ/thuế/sự kiện/lạm phát/đấu giá có harness (`tests/`). **Chưa kiểm chứng registry DataStore thật** (cần publish place).
 - v0.4 đã smoke-test trong Studio (map Đấu trường, dòng Mùa trên HUD, vào/rời hàng chờ, cooldown Giường) nhưng **trận 1v1 chưa chạy với 2 người chơi thật** (MCP chỉ điều khiển một client); logic trận, Elo, luật kết thúc, thoát giữa trận và sang mùa có harness. Hãy chạy mục 30–31 bằng Test → 2 người chơi.
+- v0.7 đã thử trong Studio thật với một client: quái đuổi theo và đánh, số bay, âm thanh được tạo và phát, bốn cửa sổ hiển thị đúng. **Chưa thử với 2 người chơi** phần xem hồ sơ người khác và hiệu ứng trong trận PvP (logic server có harness). Tai người chưa nghe âm lượng thực tế: chỉnh ở `Config.Sounds`.
+- Số bay dùng BillboardGui `AlwaysOnTop` nên công cụ chụp ảnh MCP không thấy; kiểm tra bằng cách tìm part `ES_Float` trong Workspace phía client.
+- Vector3 giả của harness không có `.Unit`: trong service dùng `v * (k / v.Magnitude)`.
+- v0.6: map, quái, HUD và ngày đêm đã xem trong Studio thật bằng ảnh chụp (một client); hướng dẫn, bảng tên và giờ trong ngày có harness. **Chưa thử trên điện thoại thật** (chỉ co giãn theo chiều cao màn hình) và chưa đo hiệu năng map trên máy yếu.
+- Công cụ chụp ảnh của MCP không chụp được BillboardGui `AlwaysOnTop`; nhãn nổi của map dùng `AlwaysOnTop = false` (cũng để nhãn không hiện xuyên tường).
+- Khi vá file bằng lệnh shell: heredoc bị giảm một lớp `\\`, nên viết script ra file rồi chạy, đừng nhúng chuỗi có `\n` thoát.
 - UI dựng bằng code: **đừng dựng lại cả danh sách mỗi lần snapshot/mỗi giây**, nút đang bị click sẽ bị huỷ; chỉ dựng lại khi dữ liệu đổi và cập nhật đồng hồ tại chỗ (xem `AuraWindow`).
 - Chuỗi trong `Config.Text` đi qua `string.format` phải viết `%%` cho dấu phần trăm.
 - Khi test tự động: prompt chỉ hiện nếu khối trong tầm nhìn camera. Đặt `workspace.CurrentCamera.CameraType = Scriptable` rồi `CFrame = CFrame.lookAt(...)` về phía khối. Khi hồi sinh, vị trí nhân vật lúc `CharacterAdded` còn ở gốc toạ độ; engine đặt vào điểm hồi sinh sau đó (xem `CombatService:_sendToInfirmary`).

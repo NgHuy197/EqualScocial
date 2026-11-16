@@ -10,6 +10,7 @@ local ContextActionService = game:GetService("ContextActionService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
 local Workspace = game:GetService("Workspace")
 
 -- Chờ thư mục Shared replicate đủ trước khi require
@@ -24,11 +25,14 @@ local Format = require(ReplicatedStorage.Shared.Format)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local Types = require(ReplicatedStorage.Shared.Types)
 
+local Ambience = require(script.Ambience)
+local Effects = require(script.Effects)
 local AuraWindow = require(script.UI.AuraWindow)
 local HUD = require(script.UI.HUD)
 local LeaderboardWindow = require(script.UI.LeaderboardWindow)
 local ProfileWindow = require(script.UI.ProfileWindow)
 local ShopWindow = require(script.UI.ShopWindow)
+local Theme = require(script.UI.Theme)
 local Toast = require(script.UI.Toast)
 
 local GET_STATE_ATTEMPTS = 3
@@ -47,8 +51,39 @@ screenGui.Parent = playerGui
 local state: Types.Snapshot? = nil
 local shopBuy = Remotes.Function("ShopBuy")
 
+-- HUD nằm ở góc trên phải nên tắt danh sách người chơi mặc định (game có bảng xếp hạng riêng).
+-- CoreGui có thể chưa sẵn sàng ngay lúc vào game: thử lại vài lần.
+task.spawn(function()
+	for _ = 1, 10 do
+		local ok = pcall(function()
+			StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)
+		end)
+		if ok then
+			return
+		end
+		task.wait(1)
+	end
+end)
+
+-- Co giãn toàn bộ UI theo chiều cao màn hình (điện thoại nằm ngang thấp hơn nhiều so với máy tính)
+local uiScale = Instance.new("UIScale")
+uiScale.Parent = screenGui
+
 local hud = HUD.new(screenGui)
 local toast = Toast.new(screenGui)
+
+local function fitScreen()
+	local camera = Workspace.CurrentCamera
+	local height = if camera then camera.ViewportSize.Y else Config.UI.ReferenceHeight
+	uiScale.Scale =
+		math.clamp(height / Config.UI.ReferenceHeight, Config.UI.MinScale, Config.UI.MaxScale)
+	return height
+end
+-- Màn hình thấp: thu gọn sẵn danh sách kỹ năng cho HUD khỏi che màn hình (bấm tiêu đề để mở)
+hud:SetSkillsExpanded(fitScreen() >= Config.UI.SkillsCollapseHeight)
+if Workspace.CurrentCamera then
+	Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitScreen)
+end
 
 -- Gửi yêu cầu mua; kết quả (thành công hay không) hiển thị bằng toast. Yield tới khi server trả lời.
 local function requestBuy(shopId: string, itemId: string)
@@ -157,11 +192,23 @@ local function fetchProfile(): Types.ProfileView?
 	return nil
 end
 
+local getPlayerProfile = Remotes.Function("GetPlayerProfile")
+local function fetchPlayerProfile(userId: number): Types.PublicProfileView?
+	local ok, view = pcall(function()
+		return getPlayerProfile:InvokeServer(userId)
+	end)
+	if ok and type(view) == "table" and type(view.Name) == "string" then
+		return view :: Types.PublicProfileView
+	end
+	return nil
+end
+
 local equipCosmetic = Remotes.Function("EquipCosmetic")
 local equipTitle = Remotes.Function("EquipTitle")
 local profileWindow: ProfileWindow.ProfileWindow
 profileWindow = ProfileWindow.new(screenGui, {
 	Fetch = fetchProfile,
+	FetchPlayer = fetchPlayerProfile,
 	OnEquip = function(id: string)
 		requestAction(equipCosmetic, id)
 		profileWindow:Refetch()
@@ -193,6 +240,10 @@ local function toggleProfile()
 end
 
 hud.ProfileButton.Activated:Connect(toggleProfile)
+hud.SoundButton.Activated:Connect(function()
+	Effects.SetEnabled(not Effects.IsEnabled())
+	hud:SetSound(Effects.IsEnabled())
+end)
 ContextActionService:BindAction(
 	"EqualSocialProfile",
 	function(_name, inputState: Enum.UserInputState)
@@ -302,6 +353,7 @@ local function applySnapshot(snapshot: any)
 	local typed = snapshot :: Types.Snapshot
 	state = typed
 	hud:Render(typed)
+	hud:SetGuide(typed.Guide)
 	shopWindow:Refresh(typed)
 	auraWindow:SetSnapshot(typed)
 	updateSeasonHud()
@@ -309,9 +361,15 @@ end
 
 Remotes.Event("StateUpdate").OnClientEvent:Connect(applySnapshot)
 
+Remotes.Event("Effect").OnClientEvent:Connect(Effects.Handle)
+
 Remotes.Event("Notify").OnClientEvent:Connect(function(text: any, kind: any)
 	if type(text) == "string" then
 		toast:Show(text, if type(kind) == "string" then kind else nil)
+		local sound = if type(kind) == "string" then Config.Sounds.NotifyKinds[kind] else nil
+		if sound then
+			Effects.Play(sound)
+		end
 	end
 end)
 
@@ -364,6 +422,15 @@ task.spawn(function()
 		task.wait(1)
 	end
 end)
+
+-- Trời sáng / tối theo giờ trong game (chỉ hiển thị)
+Ambience.Start()
+
+-- Viền và chuyển sắc cho mọi nút, kể cả nút được dựng sau này; bấm nút có tiếng click
+Theme.autoPolish(screenGui, function()
+	Effects.Play("click")
+end)
+Effects.Start()
 
 -- Lấy trạng thái lúc mới vào (server chờ dữ liệu tải xong rồi mới trả lời)
 task.spawn(function()

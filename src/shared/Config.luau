@@ -66,6 +66,7 @@ export type MonsterDef = {
 	StatDelta: { [string]: number }, -- chi phí chỉ số cho người tham gia hạ quái
 	RespawnSeconds: number,
 	SpawnPoints: number, -- số điểm xuất hiện trên bãi luyện tập (WorldBuilder tự xếp)
+	MoveSpeed: number?, -- studs/giây khi đuổi theo người chơi hoặc quay về chỗ; nil / 0 = đứng yên
 	Color: Color3,
 	Size: Vector3,
 }
@@ -315,6 +316,11 @@ local Calendar = {
 		"Chủ Nhật",
 	},
 	DayShortNames = { "T2", "T3", "T4", "T5", "T6", "T7", "CN" },
+	-- Giờ trong ngày CHỈ để hiển thị trời sáng / tối (không ảnh hưởng luật chơi). Ngày game bắt đầu lúc
+	-- SunriseHour; DaylightFraction đầu của ngày là ban ngày, phần còn lại là đêm (đêm ngắn cho dễ nhìn).
+	SunriseHour = 6,
+	SunsetHour = 18,
+	DaylightFraction = 0.75,
 }
 
 -- ───────────────────────────── Trường học ─────────────────────────────
@@ -386,6 +392,12 @@ local Combat = {
 	AttackRangeTolerance = 2, -- server cho phép lệch thêm chừng này khi kiểm tra tầm đánh
 	MinAttackCooldown = 0.4, -- cooldown tối thiểu phía server của prompt đánh
 	MonsterTickSeconds = 0.5, -- chu kỳ quái "suy nghĩ" (tìm mục tiêu, đánh, hồi sinh)
+	-- Quái di chuyển: thấy người chơi trong AggroRadius (tính từ điểm xuất hiện) thì tiến lại gần, dừng
+	-- khi còn cách StopDistance; không bao giờ rời điểm xuất hiện quá LeashRadius (nên chạy ra xa là
+	-- thoát), không còn ai thì quay về chỗ cũ.
+	AggroRadius = 24,
+	LeashRadius = 7,
+	StopDistance = 5,
 
 	-- Chia thưởng khi nhiều người cùng hạ một quái (chống cày theo nhóm)
 	MinContribution = 0.10, -- phải gây >= 10% máu tối đa mới được tính là người tham gia
@@ -416,6 +428,7 @@ local Monsters: { [string]: MonsterDef } = {
 		StatDelta = { Energy = -6, Hunger = -4, Stress = 5 },
 		RespawnSeconds = 15,
 		SpawnPoints = 4,
+		MoveSpeed = 7,
 		Color = Color3.fromRGB(255, 130, 190),
 		Size = Vector3.new(4, 4, 4), -- quái là hình cầu: chỉ cạnh X được dùng làm đường kính
 	},
@@ -430,9 +443,55 @@ local Monsters: { [string]: MonsterDef } = {
 		StatDelta = { Energy = -20, Hunger = -10, Stress = 14 },
 		RespawnSeconds = 45,
 		SpawnPoints = 2,
+		MoveSpeed = 4.5,
 		Color = Color3.fromRGB(176, 128, 84),
 		Size = Vector3.new(7, 7, 7),
 	},
+}
+
+-- ───────────────────────────── Hướng dẫn người mới (v0.6) ─────────────────────────────
+-- Chuỗi bước dẫn qua vòng lặp chính. Không có phần thưởng (mọi người vẫn xuất phát như nhau).
+-- `Event`: việc cần làm để xong bước; ReasonEvents nối lý do giao dịch của EconomyService với Event,
+-- còn "station" và "aura" do StationService / AuraService báo trực tiếp.
+
+export type GuideStep = {
+	Event: string,
+	Text: string,
+}
+
+local Guide = {
+	Steps = {
+		{
+			Event = "job",
+			Text = "Làm một lượt việc ở dãy nghề phía tây quảng trường (giữ E)",
+		},
+		{
+			Event = "shop",
+			Text = "Mua một món ở dãy cửa hàng phía bắc (nhấn E ở quầy)",
+		},
+		{
+			Event = "station",
+			Text = "Nghỉ ở một trạm miễn phí phía đông: tắm, ngủ hoặc ngồi ghế",
+		},
+		{
+			Event = "school",
+			Text = "Học một buổi ở lớp đang mở hôm nay (dãy trường phía nam)",
+		},
+		{
+			Event = "monster",
+			Text = "Hạ một con quái ở Bãi luyện tập sau trường học",
+		},
+		{
+			Event = "aura",
+			Text = "Ghé Trụ sở AURA (tòa tháp tím) để xem tài sản, đấu giá và thuế",
+		},
+	} :: { GuideStep },
+	ReasonEvents = {
+		job = "job",
+		shop = "shop",
+		school = "school",
+		monster = "monster",
+	} :: { [string]: string },
 }
 
 -- ───────────────────────────── Season (v0.4) ─────────────────────────────
@@ -454,7 +513,7 @@ local Season = {
 	StartsAt = 1794330000, -- 11/11/2026 00:00 (giờ Việt Nam): mốc tính "vào mùa muộn" cho CatchUp
 	EndsAt = 1799168400, -- 06/01/2027 00:00 (giờ Việt Nam), 8 tuần; chỉ để hiện đếm ngược
 	-- Các trường KHÔNG bị reset khi sang mùa (còn lại lấy lại từ template)
-	Persistent = { "SchemaVersion", "SeasonId", "History", "Titles", "Cosmetics" },
+	Persistent = { "SchemaVersion", "SeasonId", "History", "Titles", "Cosmetics", "Guide" },
 	HistorySize = 20, -- số mùa giữ trong lịch sử
 	TitleRules = {
 		{ Name = "Nhà vô địch đấu trường", MinRating = 1300, MinMatches = 10 },
@@ -539,6 +598,7 @@ local Cosmetics = {
 	} :: { [string]: CosmeticDef },
 	DefaultColor = Color3.fromRGB(240, 243, 250), -- màu bảng tên khi chưa gắn cosmetic
 	TitleColor = Color3.fromRGB(255, 220, 140), -- màu dòng danh hiệu dưới tên
+	FameColor = Color3.fromRGB(255, 208, 96), -- màu dòng Nổi tiếng trên bảng tên
 	NameTagMaxDistance = 70, -- studs
 	MaxIdLength = 40,
 	MaxTitleLength = 120,
@@ -808,6 +868,7 @@ local RateLimits = {
 	AuctionBid = { Calls = 4, Window = 5 },
 	PvpAttack = { Calls = 12, Window = 5 }, -- RemoteEvent; nhịp đánh thật do Pvp.AttackInterval chặn
 	GetProfile = { Calls = 3, Window = 10 },
+	GetPlayerProfile = { Calls = 4, Window = 10 },
 	EquipCosmetic = { Calls = 5, Window = 5 },
 	EquipTitle = { Calls = 5, Window = 5 },
 }
@@ -825,6 +886,45 @@ local Data = {
 	AutosaveSeconds = 120, -- chu kỳ autosave của ProfileStore (AUTO_SAVE_PERIOD)
 }
 
+-- ───────────────────────────── Âm thanh và hiệu ứng (chỉ phía client) ─────────────────────────────
+-- Âm thanh dùng file có sẵn trong client Roblox (rbxasset://sounds/...) nên không cần tải asset lên.
+-- Nhạc nền: điền id audio bạn có quyền dùng vào Music.Tracks (để trống = không có nhạc).
+
+local Sounds = {
+	Effects = {
+		click = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.5 },
+		coin = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.35 },
+		spend = { Id = "rbxasset://sounds/switch.wav", Volume = 0.4 },
+		hit = { Id = "rbxasset://sounds/swordslash.wav", Volume = 0.45 },
+		hurt = { Id = "rbxasset://sounds/uuhhh.mp3", Volume = 0.4 },
+		levelup = { Id = "rbxasset://sounds/victory.wav", Volume = 0.45 },
+		warning = { Id = "rbxasset://sounds/bass.wav", Volume = 0.3 },
+	} :: { [string]: { Id: string, Volume: number } },
+	-- Loại toast -> hiệu ứng âm thanh (loại không có ở đây thì im lặng)
+	NotifyKinds = {
+		levelup = "levelup",
+		warning = "warning",
+		error = "warning",
+	} :: { [string]: string },
+	Music = {
+		Tracks = {} :: { string }, -- ví dụ "rbxassetid://1234567"
+		Volume = 0.18,
+	},
+}
+
+local Effects = {
+	FloatSeconds = 1.1, -- thời gian số bay tồn tại
+	FloatRise = 3.2, -- studs bay lên
+	HeadOffset = 3.4, -- số của chính mình hiện cách tâm nhân vật ngần này studs
+	MaxActive = 12, -- tối đa số bay cùng lúc (quá thì bỏ cái mới)
+	Colors = {
+		gain = Color3.fromRGB(120, 232, 152),
+		loss = Color3.fromRGB(240, 110, 110),
+		hit = Color3.fromRGB(255, 226, 120),
+		hurt = Color3.fromRGB(255, 96, 96),
+	},
+}
+
 -- ───────────────────────────── Thông báo & UI ─────────────────────────────
 
 local Notify = {
@@ -839,13 +939,54 @@ local UI = {
 	-- (Căng thẳng được đảo ngược: tốt = 100 - giá trị.)
 	StatGood = 60,
 	StatWarn = 30,
+	-- Co giãn UI: tỉ lệ = chiều cao màn hình / ReferenceHeight, giữ trong [MinScale, MaxScale]
+	ReferenceHeight = 720,
+	MinScale = 0.62,
+	MaxScale = 1.15,
+	SkillsCollapseHeight = 640, -- màn hình thấp hơn mức này thì HUD thu gọn sẵn phần kỹ năng
 }
 
--- ───────────────────────────── Thế giới placeholder ─────────────────────────────
+-- ───────────────────────────── Ánh sáng và bầu trời (chỉ hiển thị) ─────────────────────────────
+-- Client nội suy giữa Day và Night theo giờ trong ngày (Calendar.GetClockTime). Không ảnh hưởng luật chơi.
+
+local Ambience = {
+	TwilightHours = 1.2, -- số giờ game chuyển dần giữa ngày và đêm quanh lúc mọc / lặn
+	LampTag = "ES_Lamp",
+	UpdateSeconds = 0.25, -- chu kỳ client cập nhật giờ trời
+	Day = {
+		Brightness = 2.6,
+		Ambient = Color3.fromRGB(120, 124, 134),
+		OutdoorAmbient = Color3.fromRGB(150, 156, 170),
+		ColorShiftTop = Color3.fromRGB(255, 244, 224),
+		FogColor = Color3.fromRGB(196, 222, 246),
+		Exposure = 0,
+	},
+	Night = {
+		Brightness = 1.4,
+		Ambient = Color3.fromRGB(88, 96, 130),
+		OutdoorAmbient = Color3.fromRGB(96, 108, 150),
+		ColorShiftTop = Color3.fromRGB(150, 170, 255),
+		FogColor = Color3.fromRGB(60, 72, 110),
+		Exposure = 0.1,
+	},
+}
+
+-- ───────────────────────────── Thế giới ─────────────────────────────
+-- Vị trí các khu trên map dựng sẵn (WorldBuilder). Chi tiết hình dáng công trình nằm trong server/World/*.
 
 local World = {
 	FolderName = "World",
 	GroundSize = 320,
+	SceneryGroundSize = 1600, -- thảm cỏ nền phía ngoài (chỉ để nhìn, có tường vô hình chặn ở mép GroundSize)
+	BoundaryHeight = 80, -- chiều cao tường vô hình quanh map
+	PlazaRadius = 24, -- quảng trường tròn quanh điểm hồi sinh
+	StreetWidth = 10,
+	StreetOffset = 17, -- tim đường vòng cách tâm dãy công trình ngần này studs
+	WelcomeOrigin = Vector3.new(0, 0, 20), -- cổng chào
+	ShowcaseOrigin = Vector3.new(112, 0, 15), -- Khu tài sản AURA (trưng bày nhà và xe)
+	ShowcaseSpacing = 32,
+	TreeCount = 90, -- số cây rải ngẫu nhiên (hạt giống cố định nên map luôn giống nhau)
+	TreeSeed = 20261116,
 	Spacing = 26, -- khoảng cách giữa các khối cùng nhóm
 	JobsOrigin = Vector3.new(-60, 0, 0), -- xếp dọc trục Z
 	StationsOrigin = Vector3.new(60, 0, 0), -- xếp dọc trục Z
@@ -868,6 +1009,7 @@ local World = {
 	DefaultSize = Vector3.new(12, 8, 12),
 	DefaultColor = Color3.fromRGB(150, 150, 150),
 	LabelMaxDistance = 90,
+	LabelWidth = 11, -- bề ngang nhãn nổi (studs); nhãn ở xa tự nhỏ lại
 }
 
 -- ───────────────────────────── Câu chữ (tiếng Việt) ─────────────────────────────
@@ -880,6 +1022,8 @@ local Text = {
 	WorldHintTap = "Nhấn [E]: %s",
 
 	WorldHintClass = "Giữ [E]: %s · Mở %s",
+	ShowcaseLabel = "KHU TÀI SẢN AURA",
+	ShowcasePlaque = "%s\nGiá thuê %s · Phí %s/chu kỳ\nNổi tiếng +%d",
 	MonsterZoneLabel = "BÃI LUYỆN TẬP",
 	MonsterZoneHint = "Nhấn [E] vào quái để đánh",
 	InfirmaryLabel = "BỆNH XÁ",
@@ -931,6 +1075,27 @@ local Text = {
 	-- HUD (client)
 	HudStats = "CHỈ SỐ",
 	HudSkills = "KỸ NĂNG",
+	HudSkillsCollapse = "KỸ NĂNG  ·  bấm để thu gọn",
+	HudSkillsExpand = "KỸ NĂNG  ·  bấm để mở",
+	HudGuide = "NHIỆM VỤ HƯỚNG DẪN",
+	GuideProgress = "(%d/%d) %s",
+	GuideStepDone = "Xong một bước hướng dẫn! Tiếp theo: %s",
+	GuideFinished = "Bạn đã xong phần hướng dẫn. Từ đây là lựa chọn của bạn: chúc cạnh tranh vui vẻ!",
+	NameTagFame = "Nổi tiếng %s",
+	HudMusicOn = "Âm thanh: Bật",
+	HudMusicOff = "Âm thanh: Tắt",
+	EffectHit = "-%d",
+	ProfileOthers = "NGƯỜI CHƠI TRONG MÁY CHỦ",
+	ProfileNoOthers = "Chưa có người chơi nào khác trong máy chủ này.",
+	ProfileView = "Xem",
+	ProfileBack = "Quay lại hồ sơ của tôi",
+	ProfileBackButton = "Quay lại",
+	PublicTitle = "Hồ sơ của %s",
+	PublicWealth = "Tài sản ròng %s · %s · Nổi tiếng %s",
+	PublicAssets = "TÀI SẢN ĐANG THUÊ",
+	PublicItems = "ĐỒ SỞ HỮU",
+	PublicNone = "Chưa có gì.",
+	PublicGone = "Người chơi này đã rời máy chủ.",
 	HudFame = "Nổi tiếng: %s",
 	HudNetWorth = "Tài sản ròng: %s",
 	HudRank = "Hạng #%d",
@@ -1127,7 +1292,7 @@ local Text = {
 }
 
 local Config = {
-	Version = "0.5.0",
+	Version = "0.7.0",
 	GameName = "Equal Social",
 	AIName = "AURA",
 
@@ -1144,6 +1309,7 @@ local Config = {
 		Aura = "ES_Aura", -- Trụ sở AURA (mở cửa sổ tài sản / đấu giá / báo cáo)
 		Arena = "ES_Arena", -- quầy hàng chờ Đấu trường (nhấn E để vào / rời hàng chờ)
 		ArenaPad = "ES_ArenaPad", -- bục xuất phát (attribute PadIndex = 1 hoặc 2); tâm đấu trường = trung điểm
+		Lamp = Ambience.LampTag, -- bóng đèn đường: client bật sáng khi trời tối
 	},
 	Attributes = {
 		Job = "JobId",
@@ -1152,6 +1318,7 @@ local Config = {
 		Class = "ClassId",
 		Monster = "MonsterId",
 		ArenaPad = "PadIndex",
+		DayNight = "ES_DayNight", -- đặt trên Lighting: client được phép chạy chu kỳ ngày đêm
 	},
 
 	Data = Data,
@@ -1166,6 +1333,7 @@ local Config = {
 	Classes = Classes,
 	Combat = Combat,
 	Monsters = Monsters,
+	Guide = Guide,
 	Season = Season,
 	Pvp = Pvp,
 	Cosmetics = Cosmetics,
@@ -1183,6 +1351,9 @@ local Config = {
 	Replication = Replication,
 	Notify = Notify,
 	UI = UI,
+	Sounds = Sounds,
+	Effects = Effects,
+	Ambience = Ambience,
 	World = World,
 	Text = Text,
 }

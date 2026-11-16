@@ -2,7 +2,7 @@
 
 Game Roblox nhiều người chơi: một xã hội mà **mọi người xuất phát như nhau** (cùng tiền, cùng chỉ số, không gia thế, không bệnh tật) và cạnh tranh công bằng bằng cách học skill, làm nghề, luyện tập, rồi mua tài sản để khoe. Mọi tài sản thuộc về siêu máy tính AI **AURA**. Lối chơi giống Stardew Valley + The Sims nhưng đề cao tương tác và cạnh tranh giữa người chơi.
 
-Trạng thái: **v0.5** (v0.4 + làm ca chung, thu hồi tài sản hiếm khi vắng mặt, bắt kịp giữa mùa, cosmetic Game Pass). Chữ hiển thị trong game là tiếng Việt.
+Trạng thái: **v0.7** (v0.6 + quái biết đuổi theo, số bay và âm thanh, xem hồ sơ người chơi khác). Chữ hiển thị trong game là tiếng Việt.
 
 Tài liệu: [docs/GDD.md](docs/GDD.md) (thiết kế, công thức, lộ trình) · [CLAUDE.md](CLAUDE.md) (luật kiến trúc, checklist test cho người và Claude Code).
 
@@ -12,7 +12,7 @@ Tài liệu: [docs/GDD.md](docs/GDD.md) (thiết kế, công thức, lộ trình
 - 6 chỉ số (Độ no, Năng lượng, Sạch sẽ, Hạnh phúc, Căng thẳng, Sức khỏe) tụt theo thời gian; Sức khỏe về 0 ⇒ "kiệt sức" (mất 10% tiền, respawn).
 - Tiền ($100 khởi điểm), nghề kiếm tiền, kỹ năng tối đa level 20.
 - 3 trạm miễn phí (Tắm, Giường, Ghế công viên), 2 cửa hàng (Quán ăn, Thời trang), chỉ số Nổi tiếng.
-- Lưu dữ liệu bằng DataStore; server-authoritative; map placeholder tự dựng để nhấn Play là chơi được.
+- Lưu dữ liệu bằng DataStore; server-authoritative; map tự dựng bằng code để nhấn Play là chơi được.
 
 **v0.2**
 - **Lịch trong game**: 10 phút thực = 1 ngày, tuần 7 ngày, hiện trên HUD.
@@ -42,6 +42,19 @@ Tài liệu: [docs/GDD.md](docs/GDD.md) (thiết kế, công thức, lộ trình
 - **Thu hồi tài sản hiếm** của chủ vắng mặt quá 7 ngày khi có người khác nhận suất.
 - **Bắt kịp giữa mùa**: vào muộn mỗi tuần +10% XP (tối đa +50%) trong 3 giờ chơi đầu; không thưởng tiền.
 - **Cosmetic**: bảng tên trên đầu nhân vật, gắn danh hiệu miễn phí, bảng tên màu bán bằng Game Pass (điền ID pass vào `Config.Cosmetics`; chỉ trang trí, không cho lợi thế).
+
+**v0.6**
+- **Thị trấn dựng sẵn bằng code** (không cần asset ngoài): quảng trường, đường vòng, nhà riêng cho từng nghề / lớp / trạm / cửa hàng, Trụ sở AURA, Đấu trường có khán đài, Bệnh xá, Bãi luyện tập, **Khu tài sản AURA** trưng bày nhà và xe kèm bảng giá, cây cối, hồ nước, đèn đường.
+- **Ngày đêm theo giờ trong game**: trời sáng lại đúng lúc sang ngày mới, đêm ngắn và đèn đường tự bật.
+- **Model quái mới** (Slime Kẹo, Gấu Bông) và bảng xếp hạng 3D kiểu bảng điện tử.
+- **Giao diện mới**: HUD dạng thẻ gọn, tự co theo màn hình, phần kỹ năng thu gọn được; mọi cửa sổ chung một kiểu khung.
+- **Hướng dẫn người mới** 6 bước (không có phần thưởng) và **Nổi tiếng hiện trên bảng tên** để khoe thành quả.
+
+**v0.7**
+- **Quái di chuyển**: thấy người chơi trong 24 studs thì tiến lại gần, không rời chỗ xuất hiện quá 7 studs (chạy ra xa là thoát), hết mục tiêu thì quay về.
+- **Phản hồi tức thời**: số bay khi nhận / mất tiền, đánh trúng và bị đánh; âm thanh cho nút bấm, tiền, đòn đánh, lên cấp, cảnh báo (file có sẵn của Roblox, không cần tải asset). Nút "Âm thanh: Bật / Tắt" trên HUD.
+- **Xem hồ sơ người khác**: trong cửa sổ Hồ sơ có danh sách người chơi cùng máy chủ; bấm "Xem" để thấy hạng, Nổi tiếng, PvP, danh hiệu, tài sản đang thuê và đồ sở hữu của họ (không lộ tiền mặt hay chỉ số).
+- Nhạc nền: điền id audio bạn có quyền dùng vào `Config.Sounds.Music.Tracks` (mặc định để trống).
 
 ## Cài đặt từng bước
 
@@ -100,7 +113,7 @@ Nếu chưa làm 2 bước này, game **vẫn chạy được** nhưng ở chế
 
 ### 6. Chơi thử
 
-Nhấn **Play** (F5). Map placeholder tự dựng (các khối có nhãn), xung quanh điểm xuất phát ở gốc toạ độ: 4 nghề ở x = −60, 3 trạm (Vòi tắm / Giường / Ghế công viên) ở x = +60, 2 cửa hàng ở z = −70, bảng xếp hạng 3D ở z = +45, Trụ sở AURA ở (65, 55), Đấu trường ở (0, −125) với quầy hàng chờ ở (0, −89), 4 lớp học ở z = +75, Bãi luyện tập quanh z = +120 và Bệnh xá ở (−75, 120). Đến gần khối, giữ **E** để làm việc/học/dùng trạm, nhấn **E** ở cửa hàng, bảng xếp hạng, Trụ sở AURA hoặc vào quái để mở cửa sổ/đánh quái.
+Nhấn **Play** (F5). Thị trấn tự dựng quanh quảng trường ở gốc toạ độ: dãy nghề phía tây (x = −60), dãy trạm nghỉ phía đông (x = +60) cùng Trụ sở AURA ở (65, 55) và Khu tài sản AURA ở (112, 15), dãy cửa hàng phía bắc (z = −70) rồi tới Đấu trường ở (0, −125) với quầy hàng chờ ở (0, −89), phía nam là bảng xếp hạng 3D (z = +45), 4 lớp học (z = +75), Bãi luyện tập quanh z = +120 và Bệnh xá ở (−75, 120). Thẻ "Nhiệm vụ hướng dẫn" trên HUD chỉ lần lượt từng nơi. Đến gần quầy / bàn / đồ vật có nhãn nổi, giữ **E** để làm việc/học/dùng trạm, nhấn **E** ở cửa hàng, bảng xếp hạng, Trụ sở AURA hoặc vào quái để mở cửa sổ/đánh quái.
 
 > Prompt **E** của Roblox chỉ hiện khi khối nằm trong tầm nhìn camera: hãy quay mặt về phía khối.
 

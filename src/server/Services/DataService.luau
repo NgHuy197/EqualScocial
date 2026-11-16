@@ -108,6 +108,7 @@ local function buildTemplate(): PlayerData
 		Cosmetics = { Equipped = "", Title = "" },
 		SeasonJoinedAt = 0,
 		SeasonPlaySeconds = 0,
+		Guide = { Step = 1 },
 	}
 end
 

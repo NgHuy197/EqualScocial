@@ -37,6 +37,7 @@ local SERVICE_ORDER = {
 	"Season",
 	"Pvp",
 	"Cosmetics",
+	"Guide",
 	"Leaderboard",
 	"Replication",
 }
@@ -63,6 +64,7 @@ local services: { [string]: any } = {
 	Season = require(Services.SeasonService),
 	Pvp = require(Services.PvpService),
 	Cosmetics = require(Services.CosmeticService),
+	Guide = require(Services.GuideService),
 	Leaderboard = require(Services.LeaderboardService),
 	Replication = require(Services.ReplicationService),
 }
