@@ -1,8 +1,8 @@
 # Equal Social — Game Design Document
 
-Phiên bản tài liệu: 0.7 (khớp bản v0.7: v0.6 + quái di chuyển, số bay và âm thanh, hồ sơ công khai) · Tên game tạm: **Equal Social** · AI cai quản: **AURA**
+Phiên bản tài liệu: 0.9 (khớp bản v0.9: v0.8 + danh mục tài sản theo bậc giá) · Tên game tạm: **Equal Social** · AI cai quản: **AURA**
 
-> Mọi con số trong tài liệu này là giá trị trong `src/shared/Config.luau`. Khi đổi số liệu, sửa Config **và** cập nhật bảng ở đây. Mục 4 (v0.1), 6 (v0.2), 7 (v0.3), 8.0–8.2 (v0.4), phần "Đã làm" của 8.3 (v0.5), 8b (v0.6) và 8c (v0.7) **đã được cài đặt**.
+> Mọi con số trong tài liệu này là giá trị trong `src/shared/Config.luau`. Khi đổi số liệu, sửa Config **và** cập nhật bảng ở đây. Mục 4 (v0.1), 6 (v0.2), 7 (v0.3), 8.0–8.2 (v0.4), phần "Đã làm" của 8.3 (v0.5), 8b (v0.6), 8c (v0.7) và 8d (v0.8) **đã được cài đặt**.
 
 ## 1. Tầm nhìn
 
@@ -191,6 +191,8 @@ Có thêm trong v0.6 (xem mục 8b): thị trấn dựng sẵn, ngày đêm, gia
 
 Có thêm trong v0.7 (xem mục 8c): quái di chuyển, số bay và âm thanh, hồ sơ công khai của người chơi khác.
 
+Có thêm trong v0.8 (xem mục 8d): Khu dân cư hiện nhà và xe đang thuê của từng người.
+
 Chưa có: tương tác trực tiếp giữa người chơi (trao đổi, hội nhóm), nhạc nền (đã có chỗ cấu hình, chưa có bài), hoạt ảnh nhân vật khi làm việc, PvP theo đội.
 
 ## 6. v0.2 — Học tập, đánh quái, bảng xếp hạng (đã triển khai)
@@ -335,13 +337,25 @@ Tài sản **không bao giờ thuộc về người chơi**: trả **giá thuê 
 
 | Tài sản | Loại | Giá thuê | Phí/chu kỳ | Nổi tiếng |
 | --- | --- | --- | --- | --- |
+| Xe đạp | xe | $150 | $2 | +3 |
 | Xe máy | xe | $800 | $8 | +15 |
-| Phòng trọ | nhà | $1.000 | $10 | +20 |
-| Căn hộ | nhà | $4.000 | $40 | +60 |
+| Xe tay ga | xe | $2.000 | $20 | +32 |
 | Ô tô | xe | $5.000 | $60 | +80 |
-| Biệt thự (hiếm, kho 3) | nhà | $20.000 | $200 | +250 |
+| Xe SUV | xe | $9.000 | $100 | +130 |
+| Xe sang | xe | $15.000 | $170 | +210 |
 | Xe thể thao (hiếm, kho 2) | xe | $30.000 | $300 | +400 |
+| Siêu xe (hiếm, kho 1) | xe | $60.000 | $600 | +900 |
+| Phòng trọ | nhà | $1.000 | $10 | +20 |
+| Nhà cấp bốn | nhà | $2.500 | $25 | +40 |
+| Căn hộ | nhà | $4.000 | $40 | +60 |
+| Nhà phố | nhà | $8.000 | $80 | +110 |
+| Nhà vườn | nhà | $12.000 | $120 | +160 |
+| Biệt thự (hiếm, kho 3) | nhà | $20.000 | $200 | +250 |
+| Dinh thự (hiếm, kho 1) | nhà | $50.000 | $500 | +700 |
 
+- **Bậc giá (v0.9):** 8 xe và 7 nhà, phí duy trì ≈ 1% giá thuê mỗi chu kỳ, đắt hơn thì Nổi tiếng cao hơn. Mỗi loại có model riêng, càng đắt càng nhiều chi tiết (`World/Props`); Khu tài sản AURA trưng bày tất cả, Khu dân cư hiện món đắt nhất mỗi người đang thuê nên "lên đời" là thấy ngay. Món rẻ nhất (Xe đạp $150) nằm trong tầm vài lượt làm đầu tiên để người mới sớm có thứ để khoe.
+- Vẫn thuê tối đa một cái mỗi loại; giữ nhiều món cùng lúc thì cộng dồn phí và Nổi tiếng. Giữ cả 11 món thường tốn $635 mỗi chu kỳ (≈ $3.800/giờ), tương đương thu nhập tối ưu ở level thấp, nên người chơi phải chọn.
+- Số liệu 9 món mới là đề xuất theo cùng tỉ lệ với 6 món cũ, chưa playtest.
 - Phí thực tế = phí gốc × **hệ số chính sách** (7.6), làm tròn.
 - **Không đủ tiền**: ghi nợ 1 chu kỳ và cảnh báo. Lần trả kế tiếp **trả bù** mọi chu kỳ đã nợ. Nợ **quá 3 chu kỳ** (`GraceCycles`) thì AURA **thu hồi**; không phạt thêm tiền.
 - **Trả lại** tài sản: không hoàn tiền (`ReturnRefundPercent = 0`).
@@ -565,7 +579,18 @@ Số liệu ở `Config.Combat` (AggroRadius, LeashRadius, StopDistance), `Confi
 - **Công khai:** tên, danh hiệu đang gắn và mọi danh hiệu, tài sản ròng, hạng, Nổi tiếng, thành tích PvP mùa này, tài sản ròng cao nhất, tên tài sản đang thuê, tên đồ sở hữu.
 - **Không công khai:** tiền mặt, chỉ số, kỹ năng, lịch sử các mùa, tiến độ hướng dẫn.
 - Chỉ xem được người **đang online cùng máy chủ** (server không đọc DataStore theo yêu cầu của client), 4 lần / 10 giây.
-- Đây là bước tiếp theo cho trụ cột "khoe được thành quả" và câu hỏi 7, 24: tài sản thuê giờ là thứ người khác xem được. Tài sản vẫn chưa hiện thành vật thể riêng của từng người trong thế giới.
+- Đây là bước tiếp theo cho trụ cột "khoe được thành quả" và câu hỏi 7, 24: tài sản thuê giờ là thứ người khác xem được. Từ v0.8 tài sản còn hiện thành nhà và xe trên lô đất riêng (mục 8d).
+
+## 8d. v0.8 — Khu dân cư (đã triển khai)
+
+Số liệu ở `Config.World.ResidenceOrigin` và `Config.World.Plot`. Code: `EstateService`, `Util/EstateModel`, `World/Landmarks.Residences`.
+
+- **Vị trí:** dãy 8 lô ở phía tây, sau dãy nghề (tâm (−120, 0), các lô cách nhau 36 studs dọc trục Z, mặt quay về thị trấn). Lối vào là lối lát đi qua khe giữa hai nhà nghề ở z = 0, có cổng "KHU DÂN CƯ".
+- **Gán lô:** khi dữ liệu tải xong, người chơi nhận lô trống có số nhỏ nhất và có toast báo số lô. Rời game thì trả lô. Lô **không lưu**: mỗi lần vào có thể nhận lô khác.
+- **Hiển thị:** ngôi nhà đắt nhất và chiếc xe đắt nhất đang thuê (mỗi loại một cái), cùng biển "Nhà của <tên>" và tên tài sản. Chưa thuê gì thì biển ghi "Chưa thuê nhà hay xe". Thuê, trả, thắng đấu giá hay bị thu hồi thì lô dựng lại ngay (chỉ khi nhà / xe hiển thị đổi).
+- **Hết lô:** người thứ 9 trở đi không có lô, có thông báo, và nhận lô khi có người rời. `Plot.Count` nên bằng số người chơi tối đa của server; hiện là 8.
+- **Chỉ để khoe** (trụ cột 4): lô không cho tiền, chỉ số, Nổi tiếng hay chỗ nghỉ; không vào được trong nhà, không lái được xe. Không có Remote nào nên client không tác động được.
+- Trả lời câu hỏi 24 ở mức "nhìn thấy được"; công dụng thật của nhà / xe (giường riêng, đi nhanh hơn) vẫn để mở vì ảnh hưởng cân bằng.
 
 ## 9. Ràng buộc nội dung (Roblox Community Standards)
 
@@ -600,7 +625,7 @@ Số liệu ở `Config.Combat` (AggroRadius, LeashRadius, StopDistance), `Confi
 21. **Học phí cao ở level cao.** Lv20 tốn ≈ $25.640 qua trường học, làm nghề thì miễn phí nhưng chậm hơn khoảng 2 lần. Đây có phải đánh đổi mong muốn, hay cần giảm hệ số học phí?
 22. **Lịch lớp học.** Lớp chỉ mở 3–4 ngày/tuần (70 phút thực/tuần). Người chơi vào sai ngày có thấy bị chặn không? Có cần hiện đếm ngược tới ngày lớp mở?
 23. **Gian lận bảng xếp hạng.** Hiện chỉ ghi cảnh báo. Khi nào cần cơ chế gỡ người chơi khỏi bảng hoặc khoá tài khoản nghi vấn?
-24. **Tài sản có công dụng không?** Nhà/xe v0.3 chỉ cho Nổi tiếng và tài sản ròng. Có nên thêm công dụng (giường riêng, đi nhanh hơn) mà không tạo lợi thế kiếm tiền quá lớn?
+24. **Tài sản có công dụng không?** *(Đã làm phần hiển thị: nhà và xe hiện trên lô riêng, xem 8d.)* Nhà/xe v0.3 chỉ cho Nổi tiếng và tài sản ròng. Có nên thêm công dụng (giường riêng, đi nhanh hơn) mà không tạo lợi thế kiếm tiền quá lớn?
 25. **Phí ngoại tuyến và tài sản hiếm bị bỏ quên.** *(Đã làm: suất của chủ vắng mặt quá 7 ngày được nhường khi có người nhận, xem 7.2.)* Còn mở: tài sản thường của người bỏ game không bị thu hồi (không chiếm kho nên chấp nhận).
 26. **AURA theo từng server.** Hệ số chính sách khác nhau giữa server. Có cần đồng bộ (MessagingService / MemoryStore)?
 27. **Mục tiêu tiền trung bình $5.000** có phù hợp không? Sau cooldown trạm thu nhập Lv0 ≈ $1.700–4.000/giờ (xem 4.7, 7.7); cần số liệu từ người chơi thật để chỉnh.

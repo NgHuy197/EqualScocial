@@ -741,12 +741,6 @@ end
 
 -- ───────────────────────────── Khu tài sản AURA ─────────────────────────────
 
-local HOUSE_BUILDERS: { [string]: (parent: Instance, base: CFrame) -> () } = {
-	boarding = Props.houseBoarding,
-	apartment = Props.houseApartment,
-	villa = Props.houseVilla,
-}
-
 local VEHICLE_COLORS = {
 	Color3.fromRGB(226, 80, 70),
 	Color3.fromRGB(70, 130, 210),
@@ -754,12 +748,14 @@ local VEHICLE_COLORS = {
 	Color3.fromRGB(90, 190, 140),
 }
 
--- Trưng bày mọi tài sản trong Config.Assets (nhà một hàng phía sau, xe trên bục phía trước) kèm bảng
--- giá. Chỉ để ngắm: thuê và đấu giá vẫn làm ở Trụ sở AURA.
-function Landmarks.Showcase(world: Instance, facing: Vector3)
+-- Trưng bày mọi tài sản trong Config.Assets theo lưới, giá tăng dần: các hàng nhà (mô hình thu nhỏ) ở
+-- phía sau, các hàng xe trên bục ở phía trước, mỗi món một bảng giá. Chỉ để ngắm: thuê và đấu giá vẫn
+-- làm ở Trụ sở AURA. Trả về bề sâu tính từ gốc ra phía trước (nơi đặt cổng) để WorldBuilder nối đường.
+function Landmarks.Showcase(world: Instance, facing: Vector3): number
 	local folder = Kit.folder(world, "AssetShowcase")
 	local origin = Config.World.ShowcaseOrigin
 	local base = CFrame.lookAt(origin, origin + facing)
+	local grid = Config.World.Showcase
 
 	local houses: { string } = {}
 	local vehicles: { string } = {}
@@ -781,15 +777,15 @@ function Landmarks.Showcase(world: Instance, facing: Vector3)
 		Kit.block(
 			folder,
 			"PlaquePost",
-			Vector3.new(0.5, 3, 0.5),
-			Kit.at(at, 0, 1.5, 0),
+			Vector3.new(0.4, 2.4, 0.4),
+			Kit.at(at, 0, 1.2, 0),
 			P.MetalDark
 		)
 		local board = Kit.block(
 			folder,
 			"Plaque",
-			Vector3.new(10, 5, 0.4),
-			Kit.at(at, 0, 5, 0) * CFrame.Angles(math.rad(12), 0, 0),
+			Vector3.new(8, 4, 0.4),
+			Kit.at(at, 0, 3.6, 0) * CFrame.Angles(math.rad(14), 0, 0),
 			P.Night
 		)
 		local line = string.format(
@@ -810,14 +806,30 @@ function Landmarks.Showcase(world: Instance, facing: Vector3)
 		)
 	end
 
-	-- Sân lát và biển tên khu
-	local span = math.max(#houses, #vehicles) * Config.World.ShowcaseSpacing
+	-- Vị trí món thứ `index` trong lưới (hàng 0 ở sau cùng), `rowForward` là vị trí hàng 0
+	local function cell(index: number, count: number, rowForward: number): CFrame
+		local row = (index - 1) // grid.PerRow
+		local inRow = math.min(grid.PerRow, count - row * grid.PerRow)
+		local column = (index - 1) % grid.PerRow
+		local x = (column - (inRow - 1) / 2) * grid.Spacing
+		return Kit.at(base, x, 0, rowForward + row * grid.RowDepth)
+	end
+
+	local houseRows = math.ceil(#houses / grid.PerRow)
+	local vehicleRows = math.ceil(#vehicles / grid.PerRow)
+	local totalDepth = (houseRows + vehicleRows) * grid.RowDepth
+	local back = -totalDepth / 2 + grid.RowDepth / 2 -- hàng sau cùng
+	local vehicleStart = back + houseRows * grid.RowDepth
+	local front = totalDepth / 2 + 6 -- cổng đặt ở đây
+
+	-- Sân lát và cổng tên khu
+	local width = grid.PerRow * grid.Spacing + 6
 	Kit.decor(
 		Kit.block(
 			folder,
 			"Court",
-			Vector3.new(span + 8, 0.2, 30),
-			Kit.at(base, 0, 0.05, 12),
+			Vector3.new(width, 0.2, totalDepth + 10),
+			Kit.at(base, 0, 0.05, 2),
 			P.Plaza,
 			Enum.Material.Cobblestone
 		)
@@ -826,7 +838,7 @@ function Landmarks.Showcase(world: Instance, facing: Vector3)
 		folder,
 		"Banner",
 		Vector3.new(26, 3, 0.6),
-		Kit.at(base, 0, 9.5, 27),
+		Kit.at(base, 0, 9.5, front),
 		P.Night,
 		Enum.Material.Metal
 	)
@@ -835,7 +847,7 @@ function Landmarks.Showcase(world: Instance, facing: Vector3)
 			folder,
 			"BannerPost",
 			Vector3.new(1, 11, 1),
-			Kit.at(base, side * 12.5, 5.5, 27),
+			Kit.at(base, side * 12.5, 5.5, front),
 			P.MetalDark,
 			Enum.Material.Metal
 		)
@@ -850,24 +862,27 @@ function Landmarks.Showcase(world: Instance, facing: Vector3)
 	end
 
 	for index, id in houses do
-		local x = (index - (#houses + 1) / 2) * Config.World.ShowcaseSpacing
-		local builder: (parent: Instance, base: CFrame) -> () = Props.houseBoarding
-		local custom = HOUSE_BUILDERS[id]
-		if custom then
-			builder = custom
-		end
-		builder(folder, Kit.at(base, x, 0, -14))
-		plaque(Kit.at(base, x - 9, 0, 0), id)
+		local spot = cell(index, #houses, back)
+		Kit.block(
+			folder,
+			"HousePad",
+			Vector3.new(grid.Spacing - 3, 0.5, grid.RowDepth - 5),
+			Kit.at(spot, 0, 0.25, -1),
+			P.StoneDark,
+			Enum.Material.Concrete
+		)
+		local house = Props.house(folder, Kit.at(spot, 0, 0.5, -2), id)
+		house:ScaleTo(grid.HouseScale)
+		plaque(Kit.at(spot, 0, 0, grid.RowDepth / 2 - 2.5), id)
 	end
 	for index, id in vehicles do
-		local x = (index - (#vehicles + 1) / 2) * Config.World.ShowcaseSpacing
-		local spot = Kit.at(base, x, 0, 16)
+		local spot = cell(index, #vehicles, vehicleStart)
 		Kit.cylinder(
 			folder,
 			"Podium",
-			15,
+			14,
 			0.6,
-			Kit.at(spot, 0, 0.3, 0),
+			Kit.at(spot, 0, 0.3, -1),
 			P.StoneDark,
 			Enum.Material.Concrete
 		)
@@ -875,22 +890,116 @@ function Landmarks.Showcase(world: Instance, facing: Vector3)
 			Kit.cylinder(
 				folder,
 				"PodiumGlow",
-				15.4,
+				14.4,
 				0.15,
-				Kit.at(spot, 0, 0.1, 0),
-				P.AuraGlow,
+				Kit.at(spot, 0, 0.1, -1),
+				if Config.Assets[id].Stock then Color3.fromRGB(255, 205, 90) else P.AuraGlow,
 				Enum.Material.Neon
 			)
 		)
 		local color = VEHICLE_COLORS[((index - 1) % #VEHICLE_COLORS) + 1]
-		local pose = Kit.at(spot, 0, 0.6, 0) * CFrame.Angles(0, math.rad(-35), 0)
-		if id == "motorbike" then
-			Props.motorbike(folder, pose, color)
-		else
-			Props.car(folder, pose, color, Config.Assets[id].Stock ~= nil)
-		end
-		plaque(Kit.at(spot, 0, 0, 9.4), id)
+		Props.vehicle(
+			folder,
+			Kit.at(spot, 0, 0.6, -1) * CFrame.Angles(0, math.rad(-35), 0),
+			id,
+			color
+		)
+		plaque(Kit.at(spot, 0, 0, grid.RowDepth / 2 - 1.5), id)
 	end
+	return front
+end
+
+-- ───────────────────────────── Khu dân cư ─────────────────────────────
+
+-- Dãy lô đất xếp dọc trục Z, mặt quay về `facing`. Mỗi lô có một part vô hình mang tag Plot (tâm lô)
+-- và một tấm biển con; EstateService dựng nhà / xe của chủ lô lên đó khi họ online.
+function Landmarks.Residences(world: Instance, facing: Vector3): number
+	local folder = Kit.folder(world, "Residences")
+	local origin = Config.World.ResidenceOrigin
+	local layout = Config.World.Plot
+	local axis = Vector3.zAxis
+
+	for index = 1, layout.Count do
+		local position = origin + axis * ((index - (layout.Count + 1) / 2) * layout.Spacing)
+		local base = CFrame.lookAt(position, position + facing)
+		-- Nền lô và hàng rào thấp ba phía (chừa mặt tiền)
+		Kit.decor(
+			Kit.block(
+				folder,
+				"PlotLawn",
+				Vector3.new(layout.Width, 0.2, layout.Depth),
+				Kit.at(base, 0, 0.02, 0),
+				P.GrassDark,
+				Enum.Material.Grass
+			)
+		)
+		Kit.decor(
+			Kit.block(
+				folder,
+				"Driveway",
+				Vector3.new(9, 0.2, layout.Depth / 2),
+				Kit.at(base, layout.VehicleRight, 0.05, layout.Depth / 4),
+				P.Path,
+				Enum.Material.Concrete
+			)
+		)
+		local halfW, halfD = layout.Width / 2, layout.Depth / 2
+		local function corner(right: number, forward: number): Vector3
+			return Kit.at(base, right, 0, forward).Position
+		end
+		Props.fence(folder, corner(-halfW, halfD), corner(-halfW, -halfD), P.White)
+		Props.fence(folder, corner(-halfW, -halfD), corner(halfW, -halfD), P.White)
+		Props.fence(folder, corner(halfW, -halfD), corner(halfW, halfD), P.White)
+
+		local plot = Kit.zone(folder, `Plot{index}`, Vector3.new(4, 1, 4), Kit.at(base, 0, 0.5, 0))
+		Kit.block(
+			plot,
+			"SignPost",
+			Vector3.new(0.5, 4, 0.5),
+			Kit.at(base, halfW - 5, 2, layout.SignForward),
+			P.MetalDark
+		)
+		Kit.block(
+			plot,
+			"PlotSign",
+			Vector3.new(9, 3.4, 0.4),
+			Kit.at(base, halfW - 5, 5.4, layout.SignForward),
+			P.Night
+		)
+		plot:SetAttribute(Config.Attributes.Plot, index)
+		CollectionService:AddTag(plot, Config.Tags.Plot)
+	end
+
+	-- Cổng tên khu ở đầu lối vào
+	local gate = origin + facing * (layout.Depth / 2 + 12)
+	local gateBase = CFrame.lookAt(gate, gate + facing)
+	for _, side in { -1, 1 } do
+		Kit.block(
+			folder,
+			"GatePost",
+			Vector3.new(1, 10, 1),
+			Kit.at(gateBase, side * 9, 5, 0),
+			P.MetalDark,
+			Enum.Material.Metal
+		)
+	end
+	local banner = Kit.block(
+		folder,
+		"Banner",
+		Vector3.new(19, 2.6, 0.6),
+		Kit.at(gateBase, 0, 9.4, 0),
+		P.Night,
+		Enum.Material.Metal
+	)
+	for _, face in { Enum.NormalId.Front, Enum.NormalId.Back } do
+		Kit.sign(
+			banner,
+			face,
+			Config.Text.ResidenceLabel,
+			{ TextColor = Config.Cosmetics.FameColor, Padding = 10, LightInfluence = 0 }
+		)
+	end
+	return layout.Count
 end
 
 return Landmarks

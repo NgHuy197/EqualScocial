@@ -624,11 +624,40 @@ local Leaderboard = {
 -- máy chủ cùng nhịp. Phí duy trì chỉ tính khi người chơi đang online (không tính phí ngoại tuyến).
 
 local Assets: { [string]: AssetDef } = {
-	boarding = { Name = "Phòng trọ", Kind = "house", Price = 1000, FeePerCycle = 10, Fame = 20 },
+	-- Phí duy trì mỗi chu kỳ ≈ 1% giá thuê. Mỗi loại thuê tối đa một cái; Khu dân cư hiện nhà và xe
+	-- ĐẮT NHẤT đang thuê, nên lên đời là thấy ngay. Hình dáng từng loại: server/World/Props.
+	-- ── Xe, từ rẻ tới đắt ──
+	bicycle = { Name = "Xe đạp", Kind = "vehicle", Price = 150, FeePerCycle = 2, Fame = 3 },
 	motorbike = { Name = "Xe máy", Kind = "vehicle", Price = 800, FeePerCycle = 8, Fame = 15 },
-	apartment = { Name = "Căn hộ", Kind = "house", Price = 4000, FeePerCycle = 40, Fame = 60 },
+	scooter = { Name = "Xe tay ga", Kind = "vehicle", Price = 2000, FeePerCycle = 20, Fame = 32 },
 	car = { Name = "Ô tô", Kind = "vehicle", Price = 5000, FeePerCycle = 60, Fame = 80 },
-	-- Tài sản hiếm: kho giới hạn toàn cầu (registry DataStore), chỉ có được qua đấu giá
+	suv = { Name = "Xe SUV", Kind = "vehicle", Price = 9000, FeePerCycle = 100, Fame = 130 },
+	luxury_car = {
+		Name = "Xe sang",
+		Kind = "vehicle",
+		Price = 15000,
+		FeePerCycle = 170,
+		Fame = 210,
+	},
+	-- ── Nhà, từ rẻ tới đắt ──
+	boarding = { Name = "Phòng trọ", Kind = "house", Price = 1000, FeePerCycle = 10, Fame = 20 },
+	cottage = {
+		Name = "Nhà cấp bốn",
+		Kind = "house",
+		Price = 2500,
+		FeePerCycle = 25,
+		Fame = 40,
+	},
+	apartment = { Name = "Căn hộ", Kind = "house", Price = 4000, FeePerCycle = 40, Fame = 60 },
+	townhouse = { Name = "Nhà phố", Kind = "house", Price = 8000, FeePerCycle = 80, Fame = 110 },
+	garden_house = {
+		Name = "Nhà vườn",
+		Kind = "house",
+		Price = 12000,
+		FeePerCycle = 120,
+		Fame = 160,
+	},
+	-- ── Tài sản hiếm: kho giới hạn toàn cầu (registry DataStore), chỉ có được qua đấu giá ──
 	villa = {
 		Name = "Biệt thự",
 		Kind = "house",
@@ -644,6 +673,22 @@ local Assets: { [string]: AssetDef } = {
 		FeePerCycle = 300,
 		Fame = 400,
 		Stock = 2,
+	},
+	mansion = {
+		Name = "Dinh thự",
+		Kind = "house",
+		Price = 50000,
+		FeePerCycle = 500,
+		Fame = 700,
+		Stock = 1,
+	},
+	supercar = {
+		Name = "Siêu xe",
+		Kind = "vehicle",
+		Price = 60000,
+		FeePerCycle = 600,
+		Fame = 900,
+		Stock = 1,
 	},
 }
 
@@ -983,8 +1028,27 @@ local World = {
 	StreetWidth = 10,
 	StreetOffset = 17, -- tim đường vòng cách tâm dãy công trình ngần này studs
 	WelcomeOrigin = Vector3.new(0, 0, 20), -- cổng chào
-	ShowcaseOrigin = Vector3.new(112, 0, 15), -- Khu tài sản AURA (trưng bày nhà và xe)
-	ShowcaseSpacing = 32,
+	ShowcaseOrigin = Vector3.new(122, 0, 15), -- Khu tài sản AURA (trưng bày nhà và xe)
+	-- Lưới trưng bày: mỗi hàng PerRow món, xếp theo giá tăng dần; nhà trưng bày là mô hình thu nhỏ
+	-- (nhà thật kích thước đủ hiện ở Khu dân cư)
+	Showcase = {
+		PerRow = 4,
+		Spacing = 20, -- khoảng cách ngang giữa hai món
+		RowDepth = 18, -- khoảng cách giữa hai hàng
+		HouseScale = 0.5,
+	},
+	-- Khu dân cư (phía tây, sau dãy nghề): mỗi người chơi online một lô, hiện nhà và xe đang thuê
+	ResidenceOrigin = Vector3.new(-120, 0, 0), -- tâm dãy lô; các lô xếp dọc trục Z, mặt quay về +X
+	Plot = {
+		Count = 8,
+		Spacing = 36,
+		Width = 32,
+		Depth = 46,
+		HouseForward = -9, -- nhà lùi về phía sau lô
+		VehicleRight = -9, -- xe đỗ lệch sang một bên sân trước
+		VehicleForward = 15,
+		SignForward = 21,
+	},
 	TreeCount = 90, -- số cây rải ngẫu nhiên (hạt giống cố định nên map luôn giống nhau)
 	TreeSeed = 20261116,
 	Spacing = 26, -- khoảng cách giữa các khối cùng nhóm
@@ -1023,6 +1087,12 @@ local Text = {
 
 	WorldHintClass = "Giữ [E]: %s · Mở %s",
 	ShowcaseLabel = "KHU TÀI SẢN AURA",
+	ResidenceLabel = "KHU DÂN CƯ",
+	PlotEmpty = "Lô đất trống",
+	PlotBare = "Lô của %s\nChưa thuê nhà hay xe",
+	PlotOwned = "Nhà của %s\n%s",
+	PlotAssigned = "Lô số %d ở Khu dân cư (phía tây, sau dãy nghề) là của bạn: nhà và xe bạn thuê từ AURA sẽ hiện ở đó.",
+	PlotNone = "Khu dân cư đã hết lô trống; bạn vẫn thuê tài sản bình thường nhưng chưa có chỗ trưng bày.",
 	ShowcasePlaque = "%s\nGiá thuê %s · Phí %s/chu kỳ\nNổi tiếng +%d",
 	MonsterZoneLabel = "BÃI LUYỆN TẬP",
 	MonsterZoneHint = "Nhấn [E] vào quái để đánh",
@@ -1292,7 +1362,7 @@ local Text = {
 }
 
 local Config = {
-	Version = "0.7.0",
+	Version = "0.9.0",
 	GameName = "Equal Social",
 	AIName = "AURA",
 
@@ -1310,6 +1380,7 @@ local Config = {
 		Arena = "ES_Arena", -- quầy hàng chờ Đấu trường (nhấn E để vào / rời hàng chờ)
 		ArenaPad = "ES_ArenaPad", -- bục xuất phát (attribute PadIndex = 1 hoặc 2); tâm đấu trường = trung điểm
 		Lamp = Ambience.LampTag, -- bóng đèn đường: client bật sáng khi trời tối
+		Plot = "ES_Plot", -- lô đất Khu dân cư (attribute PlotIndex); EstateService dựng nhà / xe của chủ lô
 	},
 	Attributes = {
 		Job = "JobId",
@@ -1318,6 +1389,7 @@ local Config = {
 		Class = "ClassId",
 		Monster = "MonsterId",
 		ArenaPad = "PadIndex",
+		Plot = "PlotIndex",
 		DayNight = "ES_DayNight", -- đặt trên Lighting: client được phép chạy chu kỳ ngày đêm
 	},
 

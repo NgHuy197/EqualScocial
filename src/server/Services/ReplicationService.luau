@@ -140,6 +140,8 @@ function ReplicationService:BuildSnapshot(player: Player): Types.Snapshot?
 	local fame = services.Shop:GetFame(player) + services.Assets:GetFame(player)
 	-- Bảng tên trên đầu hiện Nổi tiếng: chỉ dựng lại khi con số đổi
 	services.Cosmetics:SetFame(player, fame)
+	-- Lô đất ở Khu dân cư: dựng lại khi nhà / xe đang thuê đổi
+	services.Estate:Refresh(player)
 
 	return {
 		Seq = seq,

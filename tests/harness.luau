@@ -272,6 +272,16 @@ local MonsterModelStub = {
 		handle.LastMoveSeconds = seconds
 	end,
 }
+-- Lô đất giả: ghi lại lần dựng gần nhất của mỗi lô; thay cho Util/EstateModel
+local estateRenders = {}
+local EstateModelStub = {
+	Render = function(plot, text, owned, houseId, vehicleId, colorIndex)
+		local record = estateRenders[plot] or { Count = 0 }
+		record.Count += 1
+		record.Text, record.Owned, record.House, record.Vehicle, record.Color = text, owned, houseId, vehicleId, colorIndex
+		estateRenders[plot] = record
+	end,
+}
 local boardWrites = {}
 local BoardGuiStub = { Update = function(part, text) boardWrites[part] = text end }
 local nameTags = {} -- character -> { Name, Title, Color }
@@ -299,6 +309,8 @@ fakeRequire = function(node)
 			cache[path] = MonsterModelStub
 		elseif path == "server/Util/BoardGui" then
 			cache[path] = BoardGuiStub
+		elseif path == "server/Util/EstateModel" then
+			cache[path] = EstateModelStub
 		elseif path == "server/Util/NameTag" then
 			cache[path] = NameTagStub
 		else
@@ -355,14 +367,14 @@ end
 local Config = fakeRequire(nodes["shared/Config"])
 local Format = fakeRequire(nodes["shared/Format"])
 
-local ORDER = { "Data", "Economy", "Stats", "Skills", "Jobs", "Stations", "Shop", "School", "Combat", "Assets", "Auction", "Aura", "Season", "Pvp", "Cosmetics", "Guide", "Leaderboard", "Replication" }
+local ORDER = { "Data", "Economy", "Stats", "Skills", "Jobs", "Stations", "Shop", "School", "Combat", "Assets", "Auction", "Aura", "Season", "Pvp", "Cosmetics", "Guide", "Estate", "Leaderboard", "Replication" }
 local MODULE_OF = {
 	Data = "DataService", Economy = "EconomyService", Stats = "StatsService", Skills = "SkillService",
 	Jobs = "JobService", Stations = "StationService", Shop = "ShopService", School = "SchoolService",
 	Combat = "CombatService", Leaderboard = "LeaderboardService", Replication = "ReplicationService",
 	Assets = "AssetService", Auction = "AuctionService", Aura = "AuraService",
 	Season = "SeasonService", Pvp = "PvpService", Cosmetics = "CosmeticService",
-	Guide = "GuideService",
+	Guide = "GuideService", Estate = "EstateService",
 }
 local svc = {}
 for _, n in ORDER do svc[n] = fakeRequire(nodes["server/Services/" .. MODULE_OF[n]]) end
@@ -1084,6 +1096,13 @@ orderedUnavailable = true
 
 -- ═══════════════════════════ v0.3: AURA ═══════════════════════════
 local function lastNotif(player) local n = lastNotification(player) return n and n.text or "" end
+-- Có thông báo nào chứa `text` không (khi service khác có thể gửi thêm thông báo sau đó)
+local function hasNotif(player, text)
+	for _, n in notifications(player) do
+		if string.find(n.text, text, 1, true) then return true end
+	end
+	return false
+end
 local function loadNew(id, name, pos, money)
 	local p, root = newPlayer(id, name, pos)
 	svc.Data:_load(p)
@@ -1849,7 +1868,7 @@ do
 	svc.Data:_load(Back)
 	svc.Assets:VerifyRare(Back)
 	check("Quay lại sau khi suất bị nhận: mất Biệt thự", svc.Data:Get(Back).Assets.villa == nil)
-	check("Quay lại: có thông báo vắng mặt", string.find(lastNotif(Back), "vắng mặt", 1, true) ~= nil)
+	check("Quay lại: có thông báo vắng mặt", hasNotif(Back, "vắng mặt"))
 
 	-- Chủ đang hoạt động: nhịp làm mới thời điểm, không bị thu hồi
 	storeData["registry"].villa["2202"] = now - 100
@@ -2235,6 +2254,137 @@ do
 	T.Parent = PlayersService
 
 	for _, pl in { R, T, V1, V2, V3, V4 } do svc.Data:_release(pl) end
+end
+
+-- ═══════════════ Khu dân cư: lô đất hiện nhà và xe đang thuê (v0.8) ═══════════════
+do
+	local Estate = svc.Estate
+	local function plotPart(index)
+		return fakeBasePart(Vector3.new(-120, 0.5, index * 36), Vector3.new(4, 1, 4), { PlotIndex = index })
+	end
+	local p1, p2 = plotPart(1), plotPart(2)
+	Estate:_registerPlot(p2)
+	Estate:_registerPlot(p1)
+	Estate:_registerPlot(p1)
+	eq("Lô mới đăng ký: biển 'trống'", estateRenders[p1].Text, Config.Text.PlotEmpty)
+	eq("Đăng ký trùng không dựng lại", estateRenders[p1].Count, 1)
+	check("Lô trống không có chủ", estateRenders[p1].Owned == false and estateRenders[p1].House == nil)
+	local bad = fakeBasePart(Vector3.new(0, 0, 0), Vector3.new(4, 1, 4), { PlotIndex = "x" })
+	Estate:_registerPlot(bad)
+	eq("Lô thiếu PlotIndex hợp lệ bị bỏ qua", estateRenders[bad], nil)
+
+	-- Tài sản đắt nhất theo loại
+	local A, dA = loadNew(2701, "ChuNha", Vector3.new(0, 3, 0), 500)
+	eq("Chưa thuê gì: không có nhà", Estate:GetBest(dA, "house"), nil)
+	dA.Assets.boarding = { LeasedAt = 1, Missed = 0 }
+	dA.Assets.apartment = { LeasedAt = 1, Missed = 0 }
+	dA.Assets.motorbike = { LeasedAt = 1, Missed = 0 }
+	eq("Nhà đắt nhất", Estate:GetBest(dA, "house"), "apartment")
+	eq("Xe đắt nhất", Estate:GetBest(dA, "vehicle"), "motorbike")
+	dA.Assets.khong_co = { LeasedAt = 1, Missed = 0 }
+	eq("Id lạ trong dữ liệu bị bỏ qua", Estate:GetBest(dA, "house"), "apartment")
+	dA.Assets.khong_co = nil
+
+	-- Gán lô: lô trống số nhỏ nhất, có thông báo, dựng ngay
+	Estate:_assign(A)
+	eq("Người đầu nhận lô 1", Estate:GetPlotIndex(A), 1)
+	check("Có thông báo số lô", string.find(lastNotif(A), "Lô số 1", 1, true) ~= nil)
+	local r1 = estateRenders[p1]
+	check("Lô 1 hiện căn hộ và xe máy", r1.House == "apartment" and r1.Vehicle == "motorbike" and r1.Owned == true)
+	check("Biển ghi tên chủ và tài sản", string.find(r1.Text, "ChuNha", 1, true) ~= nil and string.find(r1.Text, Config.Assets.apartment.Name, 1, true) ~= nil)
+	Estate:_assign(A)
+	eq("Gán lại không đổi lô", Estate:GetPlotIndex(A), 1)
+
+	-- Chỉ dựng lại khi nhà / xe đổi
+	local count = r1.Count
+	svc.Replication:BuildSnapshot(A)
+	eq("Snapshot không đổi tài sản: không dựng lại", estateRenders[p1].Count, count)
+	dA.Money = 123
+	svc.Replication:BuildSnapshot(A)
+	eq("Đổi tiền không dựng lại lô", estateRenders[p1].Count, count)
+	dA.Assets.car = { LeasedAt = 1, Missed = 0 }
+	svc.Replication:BuildSnapshot(A)
+	eq("Thuê ô tô: lô đổi xe", estateRenders[p1].Vehicle, "car")
+	eq("Thuê ô tô: dựng lại đúng một lần", estateRenders[p1].Count, count + 1)
+	dA.Assets.apartment = nil
+	svc.Replication:BuildSnapshot(A)
+	eq("Trả căn hộ: còn phòng trọ", estateRenders[p1].House, "boarding")
+	dA.Assets = {}
+	svc.Replication:BuildSnapshot(A)
+	check("Trả hết: lô vẫn của mình nhưng trống", estateRenders[p1].House == nil and estateRenders[p1].Vehicle == nil and estateRenders[p1].Owned == true)
+	eq("Biển 'chưa thuê'", estateRenders[p1].Text, string.format(Config.Text.PlotBare, "ChuNha"))
+
+	-- Người thứ hai, thứ ba (hết lô)
+	local B, dB = loadNew(2702, "HangXom", Vector3.new(0, 3, 0), 500)
+	dB.Assets.villa = { LeasedAt = 1, Missed = 0 }
+	Estate:_assign(B)
+	eq("Người thứ hai nhận lô 2", Estate:GetPlotIndex(B), 2)
+	eq("Lô 2 hiện biệt thự", estateRenders[p2].House, "villa")
+	local C = loadNew(2703, "DenSau", Vector3.new(0, 3, 0), 500)
+	Estate:_assign(C)
+	eq("Hết lô: không có lô", Estate:GetPlotIndex(C), nil)
+	eq("Hết lô: có thông báo", lastNotif(C), Config.Text.PlotNone)
+	svc.Replication:BuildSnapshot(C)
+	check("Không có lô: snapshot vẫn dựng bình thường", svc.Replication:BuildSnapshot(C) ~= nil)
+
+	-- Rời game: trả lô, người sau nhận lại
+	Estate:_release(A)
+	eq("Rời game: mất lô", Estate:GetPlotIndex(A), nil)
+	check("Lô 1 về trạng thái trống", estateRenders[p1].Text == Config.Text.PlotEmpty and estateRenders[p1].Owned == false)
+	Estate:_release(A)
+	eq("Trả lô hai lần không lỗi", Estate:GetPlotIndex(A), nil)
+	Estate:_assign(C)
+	eq("Người chờ nhận lô vừa trống", Estate:GetPlotIndex(C), 1)
+	eq("Lô 2 không bị ảnh hưởng", estateRenders[p2].House, "villa")
+	-- Lô không cho tiền hay Nổi tiếng
+	eq("Có lô không đổi tiền", dB.Money, 500)
+
+	Estate:_release(B)
+	Estate:_release(C)
+	for _, pl in { A, B, C } do svc.Data:_release(pl) end
+end
+
+-- ═══════════════ Danh mục tài sản theo bậc giá (v0.9) ═══════════════
+do
+	local byKind = { house = {}, vehicle = {} }
+	for id, def in Config.Assets do
+		check("Tài sản " .. id .. " có loại hợp lệ", byKind[def.Kind] ~= nil)
+		check("Tài sản " .. id .. " có tên", type(def.Name) == "string" and def.Name ~= "")
+		check("Tài sản " .. id .. ": giá, phí, Nổi tiếng dương và nguyên", def.Price > 0 and def.FeePerCycle > 0 and def.Fame > 0 and def.Price % 1 == 0 and def.FeePerCycle % 1 == 0 and def.Fame % 1 == 0)
+		local ratio = def.FeePerCycle / def.Price
+		check("Tài sản " .. id .. ": phí mỗi chu kỳ khoảng 1% giá", ratio >= 0.009 and ratio <= 0.015, "ratio " .. ratio)
+		if byKind[def.Kind] then table.insert(byKind[def.Kind], def) end
+	end
+	check("Có ít nhất 6 loại nhà", #byKind.house >= 6)
+	check("Có ít nhất 6 loại xe", #byKind.vehicle >= 6)
+	for kind, list in byKind do
+		table.sort(list, function(a, b) return a.Price < b.Price end)
+		local topCommon = 0
+		for index = 2, #list do
+			check(kind .. ": không có hai món cùng giá (" .. list[index].Name .. ")", list[index].Price > list[index - 1].Price)
+			check(kind .. ": đắt hơn thì Nổi tiếng cao hơn (" .. list[index].Name .. ")", list[index].Fame > list[index - 1].Fame)
+		end
+		for _, def in list do
+			if not def.Stock then topCommon = math.max(topCommon, def.Price) end
+		end
+		for _, def in list do
+			if def.Stock then
+				check(kind .. ": hàng hiếm " .. def.Name .. " đắt hơn mọi hàng thường", def.Price > topCommon)
+				check(kind .. ": hàng hiếm có kho >= 1", def.Stock >= 1 and def.Stock % 1 == 0)
+			end
+		end
+	end
+	-- Món rẻ nhất mua được ngay từ đầu game bằng vài lượt làm
+	check("Xe rẻ nhất không quá 2 lần tiền khởi điểm", byKind.vehicle[1].Price <= Config.Economy.StartingMoney * 2)
+
+	-- Khu dân cư chọn đúng món đắt nhất trong danh mục mới
+	local data = { Assets = { bicycle = {}, scooter = {}, suv = {}, cottage = {}, townhouse = {} } }
+	eq("Xe đắt nhất đang thuê", svc.Estate:GetBest(data, "vehicle"), "suv")
+	eq("Nhà đắt nhất đang thuê", svc.Estate:GetBest(data, "house"), "townhouse")
+	data.Assets.supercar = {}
+	data.Assets.mansion = {}
+	eq("Có siêu xe thì hiện siêu xe", svc.Estate:GetBest(data, "vehicle"), "supercar")
+	eq("Có dinh thự thì hiện dinh thự", svc.Estate:GetBest(data, "house"), "mansion")
 end
 
 print(("KẾT QUẢ: %d đạt, %d lỗi"):format(passed, failed))

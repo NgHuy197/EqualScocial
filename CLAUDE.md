@@ -8,7 +8,7 @@ Game Roblox nhiều người chơi, viết bằng Luau + Rojo. **Mọi chữ hi�
 
 Một xã hội giống ngoài đời, nhưng mọi người chơi **xuất phát như nhau**: cùng tiền ($100), cùng chỉ số, không gia thế, không bệnh tật. Người chơi cạnh tranh công bằng bằng cách học skill, làm nghề, luyện tập, đấu với nhau rồi mua tài sản để khoe. Mọi tài sản thuộc sở hữu và do siêu máy tính AI **AURA** cai quản. Lối chơi giống Stardew Valley + The Sims, nhưng đề cao tương tác và cạnh tranh giữa người chơi.
 
-Trạng thái: **v0.7** (v0.6 + quái di chuyển, số bay và âm thanh, hồ sơ công khai của người chơi khác; xem GDD mục 4, 6, 7, 8, 8b, 8c). Cá cược PvP đã bị bỏ vì Roblox cấm cờ bạc mô phỏng (GDD 8.0).
+Trạng thái: **v0.9** (v0.8 + danh mục 15 tài sản theo bậc giá, mỗi loại một model; xem GDD mục 4, 6, 7, 8, 8b, 8c, 8d). Cá cược PvP đã bị bỏ vì Roblox cấm cờ bạc mô phỏng (GDD 8.0).
 
 ## Lệnh
 
@@ -48,9 +48,9 @@ src/client  → StarterPlayer.StarterPlayerScripts.Client      init.client.luau,
 - `Config.luau`: **toàn bộ** số liệu cân bằng và câu chữ hiển thị (`Config.Text`).
 - `Remotes.luau`: danh sách RemoteEvent/RemoteFunction. Server gọi `Remotes.Init()` một lần; nơi khác dùng `Remotes.Event(name)` / `Remotes.Function(name)`.
 - `Calendar.luau`: lịch trong game thuần tính toán từ giờ server (`workspace:GetServerTimeNow()`), dùng chung server (lớp mở/đóng) và client (HUD).
-- `Services/*` (thứ tự khởi động trong `init.server.luau`): `DataService`, `EconomyService`, `StatsService`, `SkillService`, `JobService`, `StationService`, `ShopService`, `SchoolService`, `CombatService`, `AssetService` (thuê/trả tài sản, phí duy trì, thu hồi), `AuctionService` (đấu giá tài sản hiếm, tiền khóa), `AuraService` (chu kỳ, thuế, sự kiện, lạm phát, Báo cáo), `SeasonService` (thông báo sang mùa, phần Season của snapshot), `PvpService` (hàng chờ, trận 1v1, Elo), `CosmeticService` (Game Pass bảng tên màu, gắn danh hiệu, bảng tên trên đầu kèm Nổi tiếng), `GuideService` (nhiệm vụ hướng dẫn người mới, không thưởng), `LeaderboardService`, `ReplicationService`. `DataService` có thêm `OnReleasing(cb)` (chạy đồng bộ trước khi dữ liệu người rời game bị gỡ) và `TakeRollover(player)`.
+- `Services/*` (thứ tự khởi động trong `init.server.luau`): `DataService`, `EconomyService`, `StatsService`, `SkillService`, `JobService`, `StationService`, `ShopService`, `SchoolService`, `CombatService`, `AssetService` (thuê/trả tài sản, phí duy trì, thu hồi), `AuctionService` (đấu giá tài sản hiếm, tiền khóa), `AuraService` (chu kỳ, thuế, sự kiện, lạm phát, Báo cáo), `SeasonService` (thông báo sang mùa, phần Season của snapshot), `PvpService` (hàng chờ, trận 1v1, Elo), `CosmeticService` (Game Pass bảng tên màu, gắn danh hiệu, bảng tên trên đầu kèm Nổi tiếng), `GuideService` (nhiệm vụ hướng dẫn người mới, không thưởng), `EstateService` (gán lô đất Khu dân cư cho người online, hiện nhà / xe đắt nhất đang thuê; không có Remote), `LeaderboardService`, `ReplicationService`. `DataService` có thêm `OnReleasing(cb)` (chạy đồng bộ trước khi dữ liệu người rời game bị gỡ) và `TakeRollover(player)`.
 - `Vendor/ProfileStore`: thư viện ProfileStore (MAD STUDIO, Apache 2.0) giữ **nguyên bản gốc**, không sửa; nguồn và commit ghi trong `SOURCE.txt`. Được loại khỏi StyLua (`.styluaignore`), Selene (`exclude` trong `selene.toml`) và type-check (`--ignore`). Chỉ `DataService` require nó.
-- `Util/*`: `Validate` (kiểm tra dữ liệu/khoảng cách), `RateLimiter`, `Prompts` (gắn ProximityPrompt theo tag có cooldown + kiểm tra khoảng cách phía server), `Describe` (chuỗi mô tả nghề/điều kiện dùng chung), `MonsterModel` (dựng quái và thanh máu), `BoardGui` (vẽ chữ lên bảng xếp hạng 3D), `AssetRegistry` (kho tài sản hiếm toàn cầu trong DataStore, nhận/trả nguyên tử bằng `UpdateAsync`; Studio không API thì dùng bản cục bộ), `Season` (logic thuần sang mùa: lưu lịch sử, trao danh hiệu, reset về template), `NameTag` (dựng BillboardGui bảng tên trên đầu nhân vật; harness thay bằng bản giả).
+- `Util/*`: `Validate` (kiểm tra dữ liệu/khoảng cách), `RateLimiter`, `Prompts` (gắn ProximityPrompt theo tag có cooldown + kiểm tra khoảng cách phía server), `Describe` (chuỗi mô tả nghề/điều kiện dùng chung), `MonsterModel` (dựng quái và thanh máu), `BoardGui` (vẽ chữ lên bảng xếp hạng 3D), `AssetRegistry` (kho tài sản hiếm toàn cầu trong DataStore, nhận/trả nguyên tử bằng `UpdateAsync`; Studio không API thì dùng bản cục bộ), `Season` (logic thuần sang mùa: lưu lịch sử, trao danh hiệu, reset về template), `NameTag` (dựng BillboardGui bảng tên trên đầu nhân vật; harness thay bằng bản giả), `EstateModel` (dựng nhà / xe / biển trên một lô đất bằng `World/Props`; harness thay bằng bản giả).
 - Client `UI/*`: `Theme`, `HUD`, `Toast`, `ShopWindow`, `LeaderboardWindow`, `AuraWindow` (3 tab Tài sản / Đấu giá / Báo cáo), `ProfileWindow` (Hồ sơ: danh hiệu + nút gắn, bảng tên màu + nút mua/dùng, lịch sử mùa, thưởng bắt kịp; mở bằng nút trên HUD hoặc phím P).
 - `WorldBuilder` + `World/*`: dựng sẵn thị trấn bằng code nếu Workspace chưa có `World`. `World/Kit` (khối, nêm, trụ, biển chữ, nhãn nổi, bảng màu), `World/Props` (cây, đèn, ghế, hàng rào, xe, nhà mẫu), `World/Buildings` (một kiểu nhà cho mỗi id nghề / lớp / trạm / cửa hàng, id lạ dùng kiểu `generic`; hàm dựng TRẢ VỀ part làm điểm tương tác để WorldBuilder gắn tag), `World/Landmarks` (quảng trường, cổng chào, bảng xếp hạng, Trụ sở AURA, Đấu trường, Bệnh xá, Bãi luyện tập, Khu tài sản), `World/Environment` (ánh sáng, khí quyển, mây). Map tự làm chỉ cần gắn **tag + attribute** (xem bên dưới).
 - Client `Effects`: số bay và âm thanh theo RemoteEvent `Effect(kind, value, position?)` do `ReplicationService:Effect` gửi (kind: `money` / `hit` / `hurt`); chỉ để nhìn và nghe, trạng thái thật vẫn đi qua snapshot. Âm thanh và nhạc cấu hình ở `Config.Sounds`.
@@ -99,6 +99,7 @@ Model/Part đặt trong Workspace, có ít nhất một `BasePart` (prompt gắn
 | Trụ sở AURA | `ES_Aura` | (không) | nhấn E mở cửa sổ AURA |
 | Quầy Đấu trường | `ES_Arena` | (không) | nhấn E vào / rời hàng chờ |
 | Bục xuất phát | `ES_ArenaPad` | `PadIndex` | `1` hoặc `2`; tâm đấu trường = trung điểm hai bục |
+| Lô đất Khu dân cư | `ES_Plot` | `PlotIndex` | số nguyên từ 1; phải là `BasePart` đặt ở tâm lô, mặt -Z cục bộ quay ra đường; có part con tên `PlotSign` thì được viết tên chủ |
 
 Tag `ES_Monster` do `CombatService` tự gắn lên quái đang sống, không gắn tay. Nếu Workspace đã có thư mục/model tên `World`, WorldBuilder không dựng gì thêm.
 
@@ -174,6 +175,18 @@ Chạy trong Studio (Play, hoặc Test → 2 người chơi). Để test nhanh t
 33o. **Hồ sơ người khác** (Test → 2 người chơi): mở Hồ sơ (P) → mục "NGƯỜI CHƠI TRONG MÁY CHỦ" có tên người kia → "Xem" hiện hạng, Nổi tiếng, PvP, tài sản đang thuê, đồ sở hữu, danh hiệu; không có tiền mặt. "Quay lại" về hồ sơ của mình. Người kia thoát rồi mới bấm "Xem" → báo đã rời máy chủ.
 33p. **Chống gian lận v0.7**: `GetPlayerProfile:InvokeServer("abc")`, `(1.5)`, hoặc UserId không online → `nil`; hơn 4 lần / 10 giây → các lần vượt trả `nil`.
 
+**Checklist v0.8:**
+
+33q. **Khu dân cư**: vào game có toast "Lô số 1 ở Khu dân cư…"; đi qua khe giữa dãy nghề (lối lát ở z = 0) sang phía tây thấy 8 lô có hàng rào trắng, biển lô 1 ghi "Lô của <tên> / Chưa thuê nhà hay xe", các lô khác "Lô đất trống".
+33r. **Nhà và xe hiện trên lô**: thuê Xe máy ở Trụ sở AURA → xe hiện trên lô, biển đổi thành "Nhà của <tên> / Xe máy"; thuê thêm Phòng trọ → có nhà; thuê Căn hộ → nhà đổi thành căn hộ (chỉ hiện cái đắt nhất mỗi loại); trả lại → biến mất. Test nhanh: đặt tạm `Config.Economy.StartingMoney = 50000`.
+33s. **Nhiều người** (Test → 2 người chơi): người thứ hai nhận lô 2; một người thoát → lô của họ về "Lô đất trống".
+
+**Checklist v0.9:**
+
+33t. **Danh mục tài sản**: tab Tài sản ở Trụ sở AURA liệt kê 15 món theo giá; 4 món hiếm (Biệt thự, Xe thể thao, Dinh thự, Siêu xe) ghi "Chỉ qua đấu giá". Thuê Xe đạp ($150) được ngay sau vài lượt làm.
+33u. **Khu tài sản AURA** ở (122, 15): 7 mô hình nhà thu nhỏ (2 hàng phía sau) và 8 xe trên bục (2 hàng phía trước), mỗi món một bảng giá đọc được từ phía cổng; bục món hiếm viền vàng.
+33v. **Lên đời**: thuê Xe đạp rồi Xe máy → lô ở Khu dân cư đổi từ xe đạp sang xe máy (chỉ hiện món đắt nhất mỗi loại). Thêm tài sản mới: thêm mục vào `Config.Assets`; muốn có hình riêng thì thêm hàm dựng vào `World/Props` (`HOUSE_BUILDERS` / `CAR_SPECS` / `Props.vehicle`), không thì dùng hình mặc định.
+
 **Kiểm chứng sau khi publish** (cần bạn: File → Publish to Roblox, bật *Enable Studio Access to API Services*, dùng experience dev):
 
 34. **ProfileStore**: Output có `[ProfileStore]: Roblox API services available - data will be saved`, không có warn "KHÔNG LƯU". Kiếm tiền, mua Kính râm → Stop → Play: còn nguyên (mục 9).
@@ -190,6 +203,8 @@ Chạy trong Studio (Play, hoặc Test → 2 người chơi). Để test nhanh t
 - v0.2 đã smoke-test trong Studio thật (học ở Xưởng, lớp đóng cửa, đánh quái, thua trận → Bệnh xá, panel bảng xếp hạng, giới hạn `GetLeaderboard`). **Chưa kiểm chứng OrderedDataStore thật** (cần publish place).
 - v0.3 đã smoke-test trong Studio thật (mở Trụ sở, thuê Phòng trọ bằng chuột, phí duy trì, đặt giá và chốt phiên Xe thể thao, tab Báo cáo) với registry cục bộ; logic chu kỳ/thuế/sự kiện/lạm phát/đấu giá có harness (`tests/`). **Chưa kiểm chứng registry DataStore thật** (cần publish place).
 - v0.4 đã smoke-test trong Studio (map Đấu trường, dòng Mùa trên HUD, vào/rời hàng chờ, cooldown Giường) nhưng **trận 1v1 chưa chạy với 2 người chơi thật** (MCP chỉ điều khiển một client); logic trận, Elo, luật kết thúc, thoát giữa trận và sang mùa có harness. Hãy chạy mục 30–31 bằng Test → 2 người chơi.
+- v0.9: đã xem cả 15 model trong Studio (Khu tài sản và các lô mẫu dựng bằng Script thử tạm). Số liệu giá / phí / Nổi tiếng của 9 món mới là đề xuất theo cùng tỉ lệ với 6 món cũ, **chưa playtest cân bằng**.
+- v0.8: logic gán lô và chọn tài sản có harness; trong Studio đã thấy lô 1 tự gán cho người chơi và đã xem hình nhà / xe trên lô bằng một Script thử tạm gọi thẳng `EstateModel.Render`. **Chưa chạy luồng thuê thật qua Trụ sở AURA rồi nhìn lô đổi**, và chưa thử 2 người chơi.
 - v0.7 đã thử trong Studio thật với một client: quái đuổi theo và đánh, số bay, âm thanh được tạo và phát, bốn cửa sổ hiển thị đúng. **Chưa thử với 2 người chơi** phần xem hồ sơ người khác và hiệu ứng trong trận PvP (logic server có harness). Tai người chưa nghe âm lượng thực tế: chỉnh ở `Config.Sounds`.
 - Số bay dùng BillboardGui `AlwaysOnTop` nên công cụ chụp ảnh MCP không thấy; kiểm tra bằng cách tìm part `ES_Float` trong Workspace phía client.
 - Vector3 giả của harness không có `.Unit`: trong service dùng `v * (k / v.Magnitude)`.

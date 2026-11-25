@@ -2,7 +2,7 @@
 
 Game Roblox nhiều người chơi: một xã hội mà **mọi người xuất phát như nhau** (cùng tiền, cùng chỉ số, không gia thế, không bệnh tật) và cạnh tranh công bằng bằng cách học skill, làm nghề, luyện tập, rồi mua tài sản để khoe. Mọi tài sản thuộc về siêu máy tính AI **AURA**. Lối chơi giống Stardew Valley + The Sims nhưng đề cao tương tác và cạnh tranh giữa người chơi.
 
-Trạng thái: **v0.7** (v0.6 + quái biết đuổi theo, số bay và âm thanh, xem hồ sơ người chơi khác). Chữ hiển thị trong game là tiếng Việt.
+Trạng thái: **v0.9** (v0.8 + danh mục 7 loại nhà và 8 loại xe theo bậc giá, mỗi loại một model riêng). Chữ hiển thị trong game là tiếng Việt.
 
 Tài liệu: [docs/GDD.md](docs/GDD.md) (thiết kế, công thức, lộ trình) · [CLAUDE.md](CLAUDE.md) (luật kiến trúc, checklist test cho người và Claude Code).
 
@@ -55,6 +55,13 @@ Tài liệu: [docs/GDD.md](docs/GDD.md) (thiết kế, công thức, lộ trình
 - **Phản hồi tức thời**: số bay khi nhận / mất tiền, đánh trúng và bị đánh; âm thanh cho nút bấm, tiền, đòn đánh, lên cấp, cảnh báo (file có sẵn của Roblox, không cần tải asset). Nút "Âm thanh: Bật / Tắt" trên HUD.
 - **Xem hồ sơ người khác**: trong cửa sổ Hồ sơ có danh sách người chơi cùng máy chủ; bấm "Xem" để thấy hạng, Nổi tiếng, PvP, danh hiệu, tài sản đang thuê và đồ sở hữu của họ (không lộ tiền mặt hay chỉ số).
 - Nhạc nền: điền id audio bạn có quyền dùng vào `Config.Sounds.Music.Tracks` (mặc định để trống).
+
+**v0.8**
+- **Khu dân cư** (phía tây, sau dãy nghề): mỗi người chơi online được gán một trong 8 lô đất; trên lô hiện ngôi nhà và chiếc xe đắt nhất họ đang thuê từ AURA kèm biển tên. Thuê, trả hay bị thu hồi thì lô đổi theo ngay; rời game thì lô trống cho người khác. Chỉ để khoe, không cho lợi thế.
+
+**v0.9**
+- **15 tài sản theo bậc giá** (trước là 6). Xe: Xe đạp $150 → Xe máy → Xe tay ga → Ô tô → Xe SUV → Xe sang $15.000 → Xe thể thao (hiếm) → Siêu xe $60.000 (hiếm). Nhà: Phòng trọ $1.000 → Nhà cấp bốn → Căn hộ → Nhà phố → Nhà vườn $12.000 → Biệt thự (hiếm) → Dinh thự $50.000 (hiếm).
+- Mỗi loại có **model riêng, càng đắt càng nhiều chi tiết** (Dinh thự có hàng cột, mái vòm vàng, đài phun; Siêu xe có mũi vát, cánh gió, đèn gầm). Khu tài sản AURA trưng bày cả 15 món theo lưới kèm bảng giá; Khu dân cư hiện món đắt nhất mỗi người đang thuê.
 
 ## Cài đặt từng bước
 

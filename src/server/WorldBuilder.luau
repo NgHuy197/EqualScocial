@@ -266,15 +266,6 @@ local function buildStreets(world: Instance)
 		P.Plaza,
 		Enum.Material.Cobblestone
 	)
-	local showcase = World.ShowcaseOrigin
-	pave(
-		folder,
-		"ShowcaseWalk",
-		east + half,
-		showcase.X - 26,
-		showcase.Z - spoke,
-		showcase.Z + spoke
-	)
 
 	-- Đèn đường dọc mép trong của đường vòng
 	local inner = half + 1.6
@@ -552,7 +543,8 @@ function WorldBuilder.Build()
 	Landmarks.Arena(world)
 	Landmarks.Infirmary(world)
 	local spawnCount = Landmarks.MonsterZone(world)
-	Landmarks.Showcase(world, -Vector3.xAxis)
+	local showcaseFront = Landmarks.Showcase(world, -Vector3.xAxis)
+	Landmarks.Residences(world, Vector3.xAxis)
 
 	-- Chừa chỗ cho các công trình lớn trước khi rải cây
 	local aura = World.AuraOrigin
@@ -565,9 +557,48 @@ function WorldBuilder.Build()
 	local zone = World.MonsterZoneOrigin
 	local zoneHalf = World.MonsterZoneSize / 2 + 3
 	reserve(zone.X - zoneHalf, zone.X + zoneHalf, zone.Z - zoneHalf, zone.Z + zoneHalf)
+	-- Khu tài sản: lối từ đường đông tới cổng, và chừa cả sân trưng bày
 	local showcase = World.ShowcaseOrigin
-	local span = World.ShowcaseSpacing * 2
-	reserve(showcase.X - 32, showcase.X + 30, showcase.Z - span, showcase.Z + span)
+	local showcaseHalf = World.Showcase.PerRow * World.Showcase.Spacing / 2 + 6
+	local eastStreet = World.StationsOrigin.X - World.StreetOffset
+	local streetFolder = world:FindFirstChild("Streets") or world
+	pave(
+		streetFolder,
+		"ShowcaseWalk",
+		eastStreet + World.StreetWidth / 2,
+		showcase.X - showcaseFront,
+		showcase.Z - 4,
+		showcase.Z + 4
+	)
+	reserve(
+		showcase.X - showcaseFront - 2,
+		showcase.X + showcaseFront + 2,
+		showcase.Z - showcaseHalf,
+		showcase.Z + showcaseHalf
+	)
+
+	-- Khu dân cư: dãy lô, đường trước mặt và lối nối ra phố nghề (đi qua khe giữa các nhà)
+	local residence = World.ResidenceOrigin
+	local plotLayout = World.Plot
+	local rowHalf = plotLayout.Count * plotLayout.Spacing / 2
+	local roadX = residence.X + plotLayout.Depth / 2 + 6
+	local west = World.JobsOrigin.X + World.StreetOffset
+	local streets = world:FindFirstChild("Streets") or world
+	pave(
+		streets,
+		"ResidenceRoad",
+		roadX - 4,
+		roadX + 4,
+		residence.Z - rowHalf,
+		residence.Z + rowHalf
+	)
+	pave(streets, "ResidenceWalk", roadX + 4, west - World.StreetWidth / 2, -3, 3)
+	reserve(
+		residence.X - plotLayout.Depth / 2 - 2,
+		roadX + 4,
+		residence.Z - rowHalf - 2,
+		residence.Z + rowHalf + 2
+	)
 
 	buildParks(world)
 	scatterTrees(world)
