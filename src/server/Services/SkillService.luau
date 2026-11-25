@@ -50,6 +50,8 @@ function SkillService:AddXP(player: Player, skillId: string, amount: number): nu
 		return 0
 	end
 
+	-- Thưởng bắt kịp cho người vào mùa muộn (chỉ XP, không bao giờ là tiền)
+	amount *= services.Season:GetXPMultiplier(player)
 	record.XP += amount
 	local gained = 0
 	while record.Level < Config.Skills.MaxLevel do

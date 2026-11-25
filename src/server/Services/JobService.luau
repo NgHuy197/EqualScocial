@@ -10,6 +10,7 @@
 	Chống exploit: cooldown phía server do Util/Prompts áp dụng (≈ HoldDuration * CooldownFactor).
 ]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -21,6 +22,10 @@ local Prompts = require(script.Parent.Parent.Util.Prompts)
 type JobDef = Config.JobDef
 
 local services: Types.Services = {}
+
+-- Lượt làm gần nhất của mỗi người (cho "làm ca chung"); bảng yếu để người rời game tự được dọn
+type Shift = { JobId: string, Time: number, Position: Vector3 }
+local lastShift: { [Player]: Shift } = setmetatable({}, { __mode = "k" }) :: any
 
 local JobService = {}
 
@@ -67,8 +72,9 @@ function JobService:Start()
 			ActionText = job.ActionText,
 			ObjectText = Describe.JobTitle(job), -- nghề có điều kiện hiện kèm "(cần ...)"
 			HoldDuration = job.HoldDuration,
-			OnTriggered = function(player: Player)
-				self:_work(player, job, jobId)
+			OnTriggered = function(player: Player, triggered: Instance)
+				local anchor = Prompts.GetAnchor(triggered)
+				self:_work(player, job, jobId, if anchor then anchor.Position else nil)
 			end,
 			-- Báo sớm nếu quá mệt, đỡ phải giữ phím cả vài giây rồi mới biết
 			OnHoldBegan = function(player: Player)
@@ -117,7 +123,37 @@ function JobService:_canWork(player: Player, job: JobDef): (boolean, string?)
 end
 
 -- jobId (tuỳ chọn) dùng cho sự kiện của AURA: hệ số lương nghề thiếu người và ghi nhận số người đang làm
-function JobService:_work(player: Player, job: JobDef, jobId: string?)
+-- Số người KHÁC đang làm chung: cùng nghề, đã xong một lượt trong CoopWindowSeconds giây gần đây,
+-- ở chỗ làm cách `position` không quá CoopRadius studs.
+function JobService:CountPartners(
+	player: Player,
+	jobId: string,
+	position: Vector3,
+	clock: number
+): number
+	local rules = Config.JobRules
+	local count = 0
+	for other, shift in lastShift do
+		if
+			other ~= player
+			and other.Parent == Players
+			and shift.JobId == jobId
+			and clock - shift.Time <= rules.CoopWindowSeconds
+			and (shift.Position - position).Magnitude <= rules.CoopRadius
+		then
+			count += 1
+		end
+	end
+	return count
+end
+
+-- Hệ số thưởng làm ca chung (0 = không thưởng)
+function JobService:GetCoopBonus(partners: number): number
+	local rules = Config.JobRules
+	return math.min(rules.CoopMaxBonus, rules.CoopBonusPerPartner * partners)
+end
+
+function JobService:_work(player: Player, job: JobDef, jobId: string?, position: Vector3?)
 	local canWork, reason = self:_canWork(player, job)
 	if not canWork then
 		if reason then
@@ -129,28 +165,40 @@ function JobService:_work(player: Player, job: JobDef, jobId: string?)
 	-- Lương tính theo level TRƯỚC khi cộng XP của lượt này
 	local multiplier = services.Skills:GetPayMultiplier(player, job.Skill)
 	local eventBonus = if jobId then services.Aura:GetPayMultiplier(jobId) else 1
-	local pay = math.floor(job.BasePay * multiplier * eventBonus + 0.5)
+	local clock = os.clock()
+	local partners = if jobId and position
+		then self:CountPartners(player, jobId, position, clock)
+		else 0
+	local coopBonus = self:GetCoopBonus(partners)
+	local pay = math.floor(job.BasePay * multiplier * eventBonus * (1 + coopBonus) + 0.5)
 	local xp = job.XPReward or Config.JobRules.XPPerShift
 
 	local paid = services.Economy:Add(player, pay, Config.Reasons.Job)
 	if jobId then
 		services.Aura:NoteWork(player, jobId)
+		if position then
+			lastShift[player] = { JobId = jobId, Time = clock, Position = position }
+		end
 	end
 	services.Stats:Modify(player, job.StatDelta)
 	services.Skills:AddXP(player, job.Skill, xp)
 
 	local skillDef = Config.Skills.Defs[job.Skill]
-	services.Replication:Notify(
-		player,
-		string.format(
-			Config.Text.JobDone,
-			job.Name,
-			Format.money(paid),
-			math.floor(xp),
-			if skillDef then skillDef.Name else job.Skill
-		),
-		"success"
+	local text = string.format(
+		Config.Text.JobDone,
+		job.Name,
+		Format.money(paid),
+		math.floor(xp),
+		if skillDef then skillDef.Name else job.Skill
 	)
+	if coopBonus > 0 then
+		text ..= string.format(
+			Config.Text.JobCoopBonus,
+			partners,
+			math.floor(coopBonus * 100 + 0.5)
+		)
+	end
+	services.Replication:Notify(player, text, "success")
 end
 
 return JobService

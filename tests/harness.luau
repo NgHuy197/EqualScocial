@@ -105,6 +105,12 @@ local nameLookup = {} -- userId -> tên (không có = GetNameFromUserIdAsync né
 
 local PlayersService = { _list = {}, PlayerAdded = newSignal(), PlayerRemoving = newSignal() }
 function PlayersService:GetPlayers() return self._list end
+function PlayersService:GetPlayerByUserId(userId)
+	for _, p in self._list do
+		if p.UserId == userId and p.Parent == self then return p end
+	end
+	return nil
+end
 function PlayersService:GetNameFromUserIdAsync(userId)
 	local name = nameLookup[userId]
 	if not name then error("không tìm thấy người dùng " .. tostring(userId)) end
@@ -194,6 +200,7 @@ local orderedStore = {
 local orderedUnavailable = true -- true: GetOrderedDataStore ném lỗi (giống place chưa publish)
 
 local taggedInstances = {}
+local ownedPasses, marketFail = {}, false -- Game Pass giả: "userId_passId" -> true
 local fakeServices = {
 	Players = PlayersService,
 	ReplicatedStorage = { Shared = nodes["shared"] },
@@ -204,6 +211,13 @@ local fakeServices = {
 			if orderedUnavailable then error("You must publish this place to the web to access DataStore.") end
 			return orderedStore
 		end,
+	},
+	MarketplaceService = {
+		UserOwnsGamePassAsync = function(_, userId, passId)
+			if marketFail then error("Marketplace lỗi giả lập") end
+			return ownedPasses[tostring(userId) .. "_" .. tostring(passId)] == true
+		end,
+		PromptGamePassPurchaseFinished = newSignal(),
 	},
 	CollectionService = {
 		GetTagged = function(_, tag) return taggedInstances[tag] or {} end,
@@ -252,9 +266,26 @@ local MonsterModelStub = {
 		return handle
 	end,
 	SetHealth = function(handle, fraction) handle.LastFraction = fraction end,
+	MoveTo = function(handle, position, seconds)
+		handle.Body.Position = position
+		handle.Moves = (handle.Moves or 0) + 1
+		handle.LastMoveSeconds = seconds
+	end,
+}
+-- Lô đất giả: ghi lại lần dựng gần nhất của mỗi lô; thay cho Util/EstateModel
+local estateRenders = {}
+local EstateModelStub = {
+	Render = function(plot, text, owned, houseId, vehicleId, colorIndex)
+		local record = estateRenders[plot] or { Count = 0 }
+		record.Count += 1
+		record.Text, record.Owned, record.House, record.Vehicle, record.Color = text, owned, houseId, vehicleId, colorIndex
+		estateRenders[plot] = record
+	end,
 }
 local boardWrites = {}
 local BoardGuiStub = { Update = function(part, text) boardWrites[part] = text end }
+local nameTags = {} -- character -> { Name, Title, Color }
+local NameTagStub = { Apply = function(character, name, title, color, fame) nameTags[character] = { Name = name, Title = title, Color = color, Fame = fame } return true end }
 
 local PRELUDE = "local game, script, require, task, typeof, warn, Vector3, Color3, Enum, Instance, CFrame = ...; "
 local cache = {}
@@ -278,6 +309,10 @@ fakeRequire = function(node)
 			cache[path] = MonsterModelStub
 		elseif path == "server/Util/BoardGui" then
 			cache[path] = BoardGuiStub
+		elseif path == "server/Util/EstateModel" then
+			cache[path] = EstateModelStub
+		elseif path == "server/Util/NameTag" then
+			cache[path] = NameTagStub
 		else
 			cache[path] = loadFresh(path)
 		end
@@ -294,6 +329,7 @@ local function newPlayer(userId, name, pos)
 	local rootPart = { Position = pos or Vector3.new(0, 0, 0), IsA = function(_, c) return c == "BasePart" end }
 	local character = {
 		_pivots = {},
+		ChildAdded = newSignal(),
 		FindFirstChildOfClass = function(_, cls) if cls == "Humanoid" then return humanoid end return nil end,
 		FindFirstChild = function(_, n) if n == "HumanoidRootPart" then return rootPart end return nil end,
 		WaitForChild = function(_, n)
@@ -331,13 +367,14 @@ end
 local Config = fakeRequire(nodes["shared/Config"])
 local Format = fakeRequire(nodes["shared/Format"])
 
-local ORDER = { "Data", "Economy", "Stats", "Skills", "Jobs", "Stations", "Shop", "School", "Combat", "Assets", "Auction", "Aura", "Season", "Pvp", "Leaderboard", "Replication" }
+local ORDER = { "Data", "Economy", "Stats", "Skills", "Jobs", "Stations", "Shop", "School", "Combat", "Assets", "Auction", "Aura", "Season", "Pvp", "Cosmetics", "Guide", "Estate", "Leaderboard", "Replication" }
 local MODULE_OF = {
 	Data = "DataService", Economy = "EconomyService", Stats = "StatsService", Skills = "SkillService",
 	Jobs = "JobService", Stations = "StationService", Shop = "ShopService", School = "SchoolService",
 	Combat = "CombatService", Leaderboard = "LeaderboardService", Replication = "ReplicationService",
 	Assets = "AssetService", Auction = "AuctionService", Aura = "AuraService",
-	Season = "SeasonService", Pvp = "PvpService",
+	Season = "SeasonService", Pvp = "PvpService", Cosmetics = "CosmeticService",
+	Guide = "GuideService", Estate = "EstateService",
 }
 local svc = {}
 for _, n in ORDER do svc[n] = fakeRequire(nodes["server/Services/" .. MODULE_OF[n]]) end
@@ -1059,6 +1096,13 @@ orderedUnavailable = true
 
 -- ═══════════════════════════ v0.3: AURA ═══════════════════════════
 local function lastNotif(player) local n = lastNotification(player) return n and n.text or "" end
+-- Có thông báo nào chứa `text` không (khi service khác có thể gửi thêm thông báo sau đó)
+local function hasNotif(player, text)
+	for _, n in notifications(player) do
+		if string.find(n.text, text, 1, true) then return true end
+	end
+	return false
+end
 local function loadNew(id, name, pos, money)
 	local p, root = newPlayer(id, name, pos)
 	svc.Data:_load(p)
@@ -1759,6 +1803,588 @@ do
 	getProfile(T1)
 	check("Gọi lần thứ 4 trong 10 giây: nil", getProfile(T1) == nil)
 	svc.Data:_release(T1)
+end
+
+-- ═══════════════ 32. Làm ca chung ═══════════════
+do
+	local Jobs = svc.Jobs
+	local job = Config.Jobs.warehouse
+	local spot = Vector3.new(-60, 0, 0)
+	eq("Thưởng ca chung: 0 người", Jobs:GetCoopBonus(0), 0)
+	near("Thưởng ca chung: 2 người", Jobs:GetCoopBonus(2), 0.2)
+	near("Thưởng ca chung: tối đa", Jobs:GetCoopBonus(9), Config.JobRules.CoopMaxBonus)
+	local function expectedPay(partners)
+		local event = svc.Aura:GetPayMultiplier("warehouse")
+		return math.floor(job.BasePay * event * (1 + Jobs:GetCoopBonus(partners)) + 0.5)
+	end
+	-- Mỗi người làm đúng một lượt (Lv0) để lương chỉ phụ thuộc thưởng ca chung
+	local function shift(id, name, position, jobId)
+		local p, d = loadNew(id, name, position or spot, 100)
+		Jobs:_work(p, Config.Jobs[jobId or "warehouse"], jobId or "warehouse", position or spot)
+		return p, d.Money - 100
+	end
+	local _, solo = shift(2101, "Solo")
+	eq("Làm một mình: lương thường", solo, expectedPay(0))
+	-- Solo vừa làm xong nên người kế tiếp có 1 bạn làm chung
+	local p2, paid2 = shift(2102, "Ban2", spot + Vector3.new(5, 0, 0))
+	eq("Làm chung với 1 người: +10%", paid2, expectedPay(1))
+	check("Thông báo có làm chung", string.find(lastNotif(p2), "làm chung với 1 người", 1, true) ~= nil)
+	local _, paid3 = shift(2103, "Ban3", spot + Vector3.new(-5, 0, 0))
+	eq("Làm chung với 2 người: +20%", paid3, expectedPay(2))
+	local _, paid4 = shift(2104, "Ban4")
+	eq("Làm chung với 3 người: +30%", paid4, expectedPay(3))
+	local _, paid5 = shift(2105, "Ban5")
+	eq("Làm chung với 4 người: vẫn tối đa +30%", paid5, expectedPay(4))
+	local _, far = shift(2106, "Xa", spot + Vector3.new(Config.JobRules.CoopRadius + 10, 0, 0))
+	eq("Ở chỗ làm xa: không tính làm chung", far, expectedPay(0))
+	local pOther, otherPaid = shift(2107, "Khac", spot, "barista")
+	eq("Nghề khác: không tính làm chung", otherPaid, math.floor(Config.Jobs.barista.BasePay * svc.Aura:GetPayMultiplier("barista") + 0.5))
+	check("Nghề khác: không có thông báo làm chung", string.find(lastNotif(pOther), "làm chung", 1, true) == nil)
+	-- Không có vị trí (gọi trực tiếp không qua prompt): không tính làm chung
+	local pNo, dNo = loadNew(2108, "KhongViTri", spot, 100)
+	Jobs:_work(pNo, job, "warehouse")
+	eq("Không có vị trí: lương thường", dNo.Money - 100, expectedPay(0))
+end
+
+-- ═══════════════ 33. Thu hồi tài sản hiếm khi vắng mặt lâu ═══════════════
+do
+	local now = os.time()
+	local idle = Config.AssetRegistry.IdleSeconds
+	storeData["registry"] = { villa = { ["2201"] = now - idle - 3600, ["2202"] = now, ["2203"] = now } }
+	local X, dX = loadNew(2204, "NguoiMoi", Vector3.new(0, 0, 0), 100)
+	local okClaim = svc.Assets:GrantRare(X, "villa")
+	check("Kho đầy nhưng có chủ vắng mặt: nhận được", okClaim)
+	check("Người mới có Biệt thự", dX.Assets.villa ~= nil)
+	local reg = storeData["registry"].villa
+	check("Chủ vắng mặt bị gỡ khỏi registry", reg["2201"] == nil)
+	check("Chủ đang hoạt động còn nguyên", reg["2202"] ~= nil and reg["2203"] ~= nil)
+	eq("Hết suất sau khi nhận", svc.Assets:GetRemaining("villa"), 0)
+	local Y = loadNew(2205, "Muon", Vector3.new(0, 0, 0), 100)
+	check("Không còn chủ vắng mặt: kho đầy thật", not svc.Assets:GrantRare(Y, "villa"))
+
+	-- Chủ vắng mặt quay lại: AURA thu hồi tài sản trong dữ liệu
+	storeData["u_2201"] = { Money = 100, Assets = { villa = { LeasedAt = 1, Missed = 0 } } }
+	local Back = newPlayer(2201, "QuayLai")
+	svc.Data:_load(Back)
+	svc.Assets:VerifyRare(Back)
+	check("Quay lại sau khi suất bị nhận: mất Biệt thự", svc.Data:Get(Back).Assets.villa == nil)
+	check("Quay lại: có thông báo vắng mặt", hasNotif(Back, "vắng mặt"))
+
+	-- Chủ đang hoạt động: nhịp làm mới thời điểm, không bị thu hồi
+	storeData["registry"].villa["2202"] = now - 100
+	storeData["u_2202"] = { Money = 100, Assets = { villa = { LeasedAt = 1, Missed = 0 } } }
+	local Active = newPlayer(2202, "VanO")
+	svc.Data:_load(Active)
+	svc.Assets:VerifyRare(Active)
+	check("Chủ đang hoạt động giữ Biệt thự", svc.Data:Get(Active).Assets.villa ~= nil)
+	check("Nhịp làm mới thời điểm", storeData["registry"].villa["2202"] >= now)
+
+	-- Vắng mặt quá lâu nhưng chưa ai nhận suất: vẫn giữ, nhịp làm mới
+	storeData["registry"].villa["2203"] = now - idle - 10
+	storeData["u_2203"] = { Money = 100, Assets = { villa = { LeasedAt = 1, Missed = 0 } } }
+	local Lucky = newPlayer(2203, "MayMan")
+	svc.Data:_load(Lucky)
+	svc.Assets:VerifyRare(Lucky)
+	check("Vắng lâu nhưng chưa ai nhận suất: giữ Biệt thự", svc.Data:Get(Lucky).Assets.villa ~= nil)
+
+	-- Registry lỗi: không thu hồi nhầm
+	storeData["u_2206"] = { Money = 100, Assets = { villa = { LeasedAt = 1, Missed = 0 } } }
+	storeData["registry"].villa["2206"] = now
+	local Err = newPlayer(2206, "Loi")
+	svc.Data:_load(Err)
+	-- Gỡ khỏi registry SAU khi vào game: nếu registry chạy bình thường thì lần kiểm tra sau sẽ thu hồi
+	storeData["registry"].villa["2206"] = nil
+	storeFail = true
+	svc.Assets:VerifyRare(Err)
+	storeFail = false
+	check("Registry lỗi: không thu hồi", svc.Data:Get(Err).Assets.villa ~= nil)
+	storeData["registry"] = nil
+end
+
+-- ═══════════════ 34. Bắt kịp cho người vào giữa mùa ═══════════════
+do
+	local Season = svc.Season
+	local week = 7 * 86400
+	local C1, dC1 = loadNew(2301, "VaoMuon", Vector3.new(0, 0, 0), 100)
+	dC1.SeasonJoinedAt = Config.Season.StartsAt + 3 * week + 60
+	dC1.SeasonPlaySeconds = 0
+	near("Vào muộn 3 tuần: +30% XP", Season:GetCatchUpBoost(dC1), 0.3)
+	near("Hệ số XP khi còn thời gian thưởng", Season:GetXPMultiplier(C1), 1.3)
+	local xpBefore = dC1.Skills.Strength.XP
+	svc.Skills:AddXP(C1, "Strength", 10)
+	near("AddXP được nhân thưởng bắt kịp", dC1.Skills.Strength.XP - xpBefore, 13)
+	eq("Thưởng bắt kịp không đổi tiền", dC1.Money, 100)
+	dC1.SeasonJoinedAt = Config.Season.StartsAt + 12 * week
+	near("Vào muộn 12 tuần: tối đa +50%", Season:GetCatchUpBoost(dC1), Config.Season.CatchUp.MaxBoost)
+	dC1.SeasonPlaySeconds = Config.Season.CatchUp.PlayHours * 3600
+	eq("Hết giờ thưởng: hệ số 1", Season:GetXPMultiplier(C1), 1)
+	dC1.SeasonJoinedAt = Config.Season.StartsAt + 3600
+	dC1.SeasonPlaySeconds = 0
+	eq("Vào đúng tuần đầu: không thưởng", Season:GetCatchUpBoost(dC1), 0)
+	dC1.SeasonJoinedAt = 0
+	eq("Chưa ghi mốc vào mùa: không thưởng", Season:GetCatchUpBoost(dC1), 0)
+	-- Mốc vào mùa và thời gian chơi là dữ liệu theo mùa (reset khi sang mùa); cosmetic thì giữ
+	check("Cosmetics thuộc Persistent (giữ qua mùa)", table.find(Config.Season.Persistent, "Cosmetics") ~= nil)
+	check("Mốc vào mùa KHÔNG thuộc Persistent (reset khi sang mùa)", table.find(Config.Season.Persistent, "SeasonJoinedAt") == nil)
+	svc.Data:_release(C1)
+end
+
+-- ═══════════════ 35. Cosmetic: Game Pass, bảng tên, gắn danh hiệu ═══════════════
+do
+	local Cos = svc.Cosmetics
+	local gold, neon = Config.Cosmetics.Items.nametag_gold, Config.Cosmetics.Items.nametag_neon
+	local savedGold, savedNeon = gold.GamePassId, neon.GamePassId
+	gold.GamePassId, neon.GamePassId = 111, 222
+	local realSpawn = task.spawn
+	task.spawn = function(f, ...) if select("#", ...) > 0 then realSpawn(f, ...) end end
+	Cos:Start()
+	task.spawn = realSpawn
+	local equip = remoteFunctions.EquipCosmetic.OnServerInvoke
+	local equipTitle = remoteFunctions.EquipTitle.OnServerInvoke
+
+	ownedPasses["2401_111"] = true
+	storeData["u_2401"] = { Money = 100, Titles = { "Đấu sĩ · Mùa 0" } }
+	local K = newPlayer(2401, "Khach")
+	svc.Data:_load(K)
+	local dK = svc.Data:Get(K)
+	Cos:RefreshOwnership(K)
+	check("Sở hữu Game Pass: có món", Cos:IsOwned(K, "nametag_gold"))
+	check("Không mua: không có món", not Cos:IsOwned(K, "nametag_neon"))
+	local ok1 = equip(K, "nametag_gold")
+	check("Dùng món đã sở hữu", ok1)
+	eq("Lưu lựa chọn", dK.Cosmetics.Equipped, "nametag_gold")
+	check("Bảng tên đổi màu", nameTags[K.Character] ~= nil and nameTags[K.Character].Color == gold.Color)
+	local ok2, msg2 = equip(K, "nametag_neon")
+	check("Dùng món chưa sở hữu: từ chối", not ok2)
+	eq("Thông báo chưa sở hữu", msg2, Config.Text.CosmeticNotOwned)
+	eq("Từ chối không đổi lựa chọn", dK.Cosmetics.Equipped, "nametag_gold")
+	local _, msgBad = equip(K, 123)
+	eq("Tham số sai kiểu: không hợp lệ", msgBad, Config.Text.InvalidRequest)
+	local _, msgLong = equip(K, string.rep("x", Config.Cosmetics.MaxIdLength + 1))
+	eq("Chuỗi quá dài: không hợp lệ", msgLong, Config.Text.InvalidRequest)
+	local _, msgUnknown = Cos:Equip(K, "khong_co")
+	eq("Món không tồn tại: không hợp lệ", msgUnknown, Config.Text.InvalidRequest)
+	check("Cosmetic không cho Nổi tiếng", svc.Replication:BuildSnapshot(K).Fame == 0)
+
+	-- Gắn danh hiệu (chỉ danh hiệu đã có)
+	local okT = Cos:EquipTitle(K, "Đấu sĩ · Mùa 0")
+	check("Gắn danh hiệu đã có", okT)
+	eq("Bảng tên hiện danh hiệu", nameTags[K.Character].Title, "Đấu sĩ · Mùa 0")
+	local okFake, msgFake = Cos:EquipTitle(K, "Nhà vô địch đấu trường · Mùa 9")
+	check("Danh hiệu chưa có: từ chối", not okFake)
+	eq("Thông báo danh hiệu chưa có", msgFake, Config.Text.TitleNotOwned)
+	Cos:EquipTitle(K, "")
+	eq("Gỡ danh hiệu", dK.Cosmetics.Title, "")
+
+	-- Mua xong trong game: mở khóa ngay
+	fakeServices.MarketplaceService.PromptGamePassPurchaseFinished:Fire(K, 222, true)
+	check("Mua xong: sở hữu ngay", Cos:IsOwned(K, "nametag_neon"))
+	check("Mua xong: có thông báo cảm ơn", string.find(lastNotif(K), "Cảm ơn", 1, true) ~= nil)
+	fakeServices.MarketplaceService.PromptGamePassPurchaseFinished:Fire(K, 999, true)
+	check("Pass lạ: không mở khóa gì thêm", not Cos:IsOwned(K, "nametag_rose"))
+
+	-- Lỗi mạng khi kiểm tra: giữ hiểu biết cũ, không gỡ món đang dùng
+	marketFail = true
+	Cos:RefreshOwnership(K)
+	marketFail = false
+	check("Lỗi mạng: vẫn sở hữu", Cos:IsOwned(K, "nametag_gold"))
+	eq("Lỗi mạng: không gỡ món đang dùng", dK.Cosmetics.Equipped, "nametag_gold")
+	-- Hết sở hữu (ví dụ hoàn tiền): gỡ
+	ownedPasses["2401_111"] = nil
+	Cos:RefreshOwnership(K)
+	eq("Hết sở hữu: tự gỡ món", dK.Cosmetics.Equipped, "")
+
+	-- Hồ sơ có danh sách cosmetic
+	local views = Cos:GetViews(K)
+	eq("Hồ sơ: đủ món theo thứ tự", #views, #Config.Cosmetics.Order)
+	eq("Hồ sơ: món đầu", views[1].Id, Config.Cosmetics.Order[1])
+	check("Hồ sơ: món sắp ra mắt có GamePassId 0", views[3].GamePassId == 0 and not views[3].Owned)
+	-- Lựa chọn hỏng trong dữ liệu được làm sạch khi tải
+	storeData["u_2402"] = { Money = 100, Titles = {}, Cosmetics = { Equipped = "khong_co", Title = "gia mao" } }
+	local Bad = newPlayer(2402, "Hong")
+	svc.Data:_load(Bad)
+	eq("Làm sạch cosmetic không tồn tại", svc.Data:Get(Bad).Cosmetics.Equipped, "")
+	eq("Làm sạch danh hiệu không có", svc.Data:Get(Bad).Cosmetics.Title, "")
+	gold.GamePassId, neon.GamePassId = savedGold, savedNeon
+	svc.Data:_release(K)
+	svc.Data:_release(Bad)
+end
+
+-- ═══════════════ Hướng dẫn người mới và Nổi tiếng trên bảng tên (v0.6) ═══════════════
+do
+	local Guide = svc.Guide
+	Guide:Start()
+	local steps = Config.Guide.Steps
+	local G, dG = loadNew(2501, "NguoiMoi", Vector3.new(0, 3, 0), 1000)
+	eq("Người mới bắt đầu ở bước 1", dG.Guide.Step, 1)
+	local snap = svc.Replication:BuildSnapshot(G)
+	eq("Snapshot có dòng hướng dẫn bước 1", snap.Guide, string.format(Config.Text.GuideProgress, 1, #steps, steps[1].Text))
+	eq("Hướng dẫn không cho tiền", dG.Money, 1000)
+
+	-- Làm sai thứ tự: không tính
+	Guide:Report(G, "aura")
+	eq("Việc không phải bước đang làm: giữ nguyên", dG.Guide.Step, 1)
+	Guide:Report(G, "khong_co")
+	eq("Sự kiện lạ: giữ nguyên", dG.Guide.Step, 1)
+
+	-- Bước 1: giao dịch lý do job
+	svc.Economy:Add(G, 12, Config.Reasons.Job)
+	eq("Nhận lương: sang bước 2", dG.Guide.Step, 2)
+	check("Có thông báo bước kế", string.find(lastNotif(G), steps[2].Text, 1, true) ~= nil)
+	svc.Economy:Add(G, 12, Config.Reasons.Job)
+	eq("Làm lại việc cũ: không nhảy bước", dG.Guide.Step, 2)
+	-- Bước 2: mua hàng
+	svc.Economy:TrySpend(G, 10, Config.Reasons.Shop)
+	eq("Mua hàng: sang bước 3", dG.Guide.Step, 3)
+	-- Giao dịch không liên quan không tính
+	svc.Economy:TrySpend(G, 5, Config.Reasons.Tax)
+	eq("Thuế không phải việc hướng dẫn", dG.Guide.Step, 3)
+	-- Bước 3: dùng trạm thật (StationService báo)
+	dG.Stats.Hygiene = 40
+	useStation(G, "shower")
+	eq("Dùng trạm: sang bước 4", dG.Guide.Step, 4)
+	-- Trạm còn cooldown thì không tính (dùng người chơi khác đang ở bước 3)
+	local H, dH = loadNew(2502, "NguoiHai", Vector3.new(0, 3, 0), 1000)
+	dH.Guide.Step = 3
+	dH.StationUsed.shower = os.time()
+	useStation(H, "shower")
+	eq("Trạm còn cooldown: chưa xong bước", dH.Guide.Step, 3)
+	-- Bước 4, 5: học phí và thưởng quái
+	svc.Economy:TrySpend(G, 10, Config.Reasons.School)
+	eq("Học: sang bước 5", dG.Guide.Step, 5)
+	svc.Economy:Add(G, 12, Config.Reasons.Monster)
+	eq("Hạ quái: sang bước 6", dG.Guide.Step, 6)
+	local moneyBefore = dG.Money
+	Guide:Report(G, "aura")
+	eq("Ghé AURA: xong hướng dẫn", dG.Guide.Step, #steps + 1)
+	eq("Thông báo hoàn thành", lastNotif(G), Config.Text.GuideFinished)
+	eq("Xong hướng dẫn không thưởng tiền", dG.Money, moneyBefore)
+	eq("Xong rồi: snapshot không còn dòng hướng dẫn", svc.Replication:BuildSnapshot(G).Guide, nil)
+	Guide:Report(G, "job")
+	eq("Xong rồi: báo thêm không đổi gì", dG.Guide.Step, #steps + 1)
+
+	-- Giữ qua mùa, người chơi cũ được reconcile
+	check("Guide thuộc Persistent (giữ qua mùa)", table.find(Config.Season.Persistent, "Guide") ~= nil)
+	storeData["u_2503"] = { Money = 250 }
+	local Old = newPlayer(2503, "NguoiCu")
+	svc.Data:_load(Old)
+	eq("Dữ liệu cũ thiếu Guide: bổ sung bước 1", svc.Data:Get(Old).Guide.Step, 1)
+	eq("Dữ liệu cũ: giữ tiền", svc.Data:Get(Old).Money, 250)
+	-- Mỗi bước có Event và Text; lý do giao dịch trỏ tới Event có thật
+	local events = {}
+	for _, step in steps do
+		check("Bước hướng dẫn có chữ", type(step.Text) == "string" and step.Text ~= "")
+		events[step.Event] = true
+	end
+	for reason, event in Config.Guide.ReasonEvents do
+		check("ReasonEvents." .. reason .. " trỏ tới một bước", events[event] == true)
+	end
+
+	-- Nổi tiếng trên bảng tên: cập nhật khi dựng snapshot, chỉ khi con số đổi
+	svc.Replication:BuildSnapshot(G)
+	eq("Chưa có đồ: bảng tên Nổi tiếng 0", nameTags[G.Character].Fame, 0)
+	dG.Owned.sunglasses = true
+	svc.Replication:BuildSnapshot(G)
+	eq("Có Kính râm: bảng tên hiện Nổi tiếng", nameTags[G.Character].Fame, Config.Shops.fashion.Items[1].Fame)
+	nameTags[G.Character] = nil
+	svc.Replication:BuildSnapshot(G)
+	eq("Nổi tiếng không đổi: không dựng lại bảng tên", nameTags[G.Character], nil)
+
+	-- Giờ trong ngày (chỉ hiển thị)
+	local Cal = fakeRequire(nodes["shared/Calendar"])
+	local len = Config.Calendar.DayLengthSeconds
+	near("Đầu ngày game là lúc mặt trời mọc", Cal.GetClockTime(0), Config.Calendar.SunriseHour)
+	near("Hết phần ban ngày là lúc mặt trời lặn", Cal.GetClockTime(len * Config.Calendar.DaylightFraction), Config.Calendar.SunsetHour)
+	near("Giữa phần ban ngày là giữa trưa", Cal.GetClockTime(len * Config.Calendar.DaylightFraction / 2), 12)
+	local midnight = Cal.GetClockTime(len * (Config.Calendar.DaylightFraction + (1 - Config.Calendar.DaylightFraction) / 2))
+	near("Giữa đêm là 0 giờ", midnight % 24, 0)
+	local late = Cal.GetClockTime(len - 0.001)
+	check("Cuối ngày game gần lúc mọc và luôn trong 0..24", late >= 0 and late < 24 and late > Config.Calendar.SunriseHour - 0.1)
+	near("Ngày kế lặp lại", Cal.GetClockTime(len * 5 + 10), Cal.GetClockTime(10))
+
+	svc.Data:_release(G)
+	svc.Data:_release(H)
+	svc.Data:_release(Old)
+end
+
+-- ═══════════════ Quái di chuyển, hiệu ứng và hồ sơ công khai (v0.7) ═══════════════
+do
+	local cfg = Config.Combat
+	local slimeDef = Config.Monsters.slime
+	local tick = cfg.MonsterTickSeconds
+	local function effects(player)
+		local out = {}
+		for _, f in fired do
+			if f.name == "Effect" and f.player == player then table.insert(out, f.args) end
+		end
+		return out
+	end
+	local function flat(a, b) return (Vector3.new(a.X, 0, a.Z) - Vector3.new(b.X, 0, b.Z)).Magnitude end
+
+	-- Điểm xuất hiện ở xa mọi người chơi của các nhóm test trước
+	local point = fakeBasePart(Vector3.new(500, 0.5, 500), Vector3.new(5, 0.2, 5), { MonsterId = "slime" })
+	svc.Combat:_registerPoint(point)
+	local handle = built[#built].Handle
+	local mon = svc.Combat:GetMonster(handle.Model)
+	local home = mon.Home
+	check("Quái nhớ chỗ xuất hiện", home ~= nil and flat(home, Vector3.new(500, 0, 500)) < 1e-6)
+	svc.Combat:_moveMonster(mon)
+	eq("Không có ai gần: đứng yên", handle.Moves, nil)
+
+	local R, rootR, humR = newPlayer(2601, "Chay", Vector3.new(515, 3, 500))
+	svc.Data:_load(R)
+	svc.Combat:_moveMonster(mon)
+	near("Một tick đi được MoveSpeed x tick", flat(mon.Position, home), slimeDef.MoveSpeed * tick)
+	check("Đi về phía người chơi (+X)", mon.Position.X > home.X)
+	near("Model được dời tới vị trí logic", flat(handle.Body.Position, mon.Position), 0)
+	near("Thời gian trượt bằng chu kỳ tick", handle.LastMoveSeconds, tick)
+	near("Không đổi độ cao", mon.Position.Y, home.Y)
+	for _ = 1, 20 do svc.Combat:_moveMonster(mon) end
+	near("Không rời chỗ xuất hiện quá LeashRadius", flat(mon.Position, home), cfg.LeashRadius)
+	local movesAtLeash = handle.Moves
+	svc.Combat:_moveMonster(mon)
+	eq("Đã tới giới hạn: không dời nữa", handle.Moves, movesAtLeash)
+
+	-- Người chơi lại gần: dừng khi còn cách StopDistance
+	rootR.Position = Vector3.new(home.X - 9, 3, 500) -- phía bên kia: quái phải quay lại
+	for _ = 1, 20 do svc.Combat:_moveMonster(mon) end
+	near("Dừng cách mục tiêu StopDistance", flat(mon.Position, rootR.Position), cfg.StopDistance)
+	local movesNear = handle.Moves
+	svc.Combat:_moveMonster(mon)
+	eq("Đủ gần: đứng yên", handle.Moves, movesNear)
+
+	-- Ra khỏi AggroRadius: quay về chỗ cũ
+	rootR.Position = Vector3.new(home.X + cfg.AggroRadius + 5, 3, 500)
+	for _ = 1, 20 do svc.Combat:_moveMonster(mon) end
+	near("Hết mục tiêu: quay về chỗ xuất hiện", flat(mon.Position, home), 0)
+	-- Người đã gục không bị đuổi
+	rootR.Position = Vector3.new(515, 3, 500)
+	humR.Health = 0
+	near("Người đã gục: đích là chỗ xuất hiện", flat(svc.Combat:GetMoveGoal(mon), home), 0)
+	humR.Health = 100
+	-- MoveSpeed 0 / nil: đứng yên như trước
+	local savedSpeed = slimeDef.MoveSpeed
+	slimeDef.MoveSpeed = 0
+	local movesBefore = handle.Moves
+	svc.Combat:_moveMonster(mon)
+	eq("MoveSpeed 0: không di chuyển", handle.Moves, movesBefore)
+	slimeDef.MoveSpeed = nil
+	svc.Combat:_moveMonster(mon)
+	eq("MoveSpeed nil: không di chuyển", handle.Moves, movesBefore)
+	slimeDef.MoveSpeed = savedSpeed
+
+	-- Đứng ngoài tầm đánh tính từ chỗ xuất hiện nhưng trong tầm đuổi: quái tiến lại rồi mới đánh được
+	rootR.Position = Vector3.new(home.X + slimeDef.AttackRange + 5, 3, 500)
+	mon.NextAttackAt = 0
+	svc.Combat:_monsterAct(mon, os.clock())
+	eq("Chưa tới tầm: chưa bị đánh", humR.Health, 100)
+	for _ = 1, 20 do svc.Combat:_moveMonster(mon) end
+	local before = #effects(R)
+	svc.Combat:_monsterAct(mon, os.clock())
+	eq("Quái tới gần rồi đánh trúng", humR.Health, 100 - slimeDef.Damage)
+	local fx = effects(R)
+	eq("Bị đánh: có hiệu ứng", #fx, before + 1)
+	eq("Hiệu ứng bị đánh là hurt", fx[#fx][1], "hurt")
+	eq("Hiệu ứng bị đánh kèm sát thương", fx[#fx][2], slimeDef.Damage)
+
+	-- Tầm đánh của người chơi tính theo vị trí HIỆN TẠI của quái
+	rootR.Position = Vector3.new(mon.Position.X + 4, 3, 500)
+	local hpBefore = mon.HP
+	svc.Combat:_attack(R, mon)
+	eq("Đánh trúng quái đã di chuyển", mon.HP, hpBefore - svc.Combat:GetDamage(0))
+	fx = effects(R)
+	eq("Đánh trúng: hiệu ứng hit", fx[#fx][1], "hit")
+	eq("Hiệu ứng hit kèm sát thương", fx[#fx][2], svc.Combat:GetDamage(0))
+	near("Hiệu ứng hit ở vị trí quái", flat(fx[#fx][3], mon.Position), 0)
+
+	-- Tiền đổi: hiệu ứng money có dấu
+	svc.Economy:Add(R, 7, Config.Reasons.Job)
+	fx = effects(R)
+	check("Nhận tiền: money +7", fx[#fx][1] == "money" and fx[#fx][2] == 7)
+	svc.Economy:TrySpend(R, 3, Config.Reasons.Shop)
+	fx = effects(R)
+	check("Tiêu tiền: money -3", fx[#fx][1] == "money" and fx[#fx][2] == -3)
+	local countBefore = #fx
+	svc.Economy:TrySpend(R, 10 ^ 9, Config.Reasons.Shop)
+	eq("Không đủ tiền: không có hiệu ứng", #effects(R), countBefore)
+	svc.Combat:_unregisterPoint(point)
+
+	-- ── Hồ sơ công khai ──
+	local getPublic = remoteFunctions.GetPlayerProfile.OnServerInvoke
+	check("Có handler GetPlayerProfile", type(getPublic) == "function")
+	local T, dT = loadNew(2602, "KhoeCua", Vector3.new(0, 3, 0), 777)
+	dT.Owned.sunglasses = true
+	dT.Assets.motorbike = { LeasedAt = os.time(), Missed = 0 }
+	dT.Titles = { "Người có của · Mùa 0", "Đấu sĩ · Mùa 0" }
+	dT.Cosmetics.Title = "Đấu sĩ · Mùa 0"
+	dT.Pvp.Rating = 1123.4
+	dT.PeakNetWorth = 4321
+	local V1 = loadNew(2603, "NguoiXem")
+	local view = getPublic(V1, 2602)
+	check("Xem được hồ sơ người đang online", view ~= nil)
+	eq("Tên hiển thị", view.Name, "KhoeCua")
+	eq("Nổi tiếng = đồ + tài sản", view.Fame, Config.Shops.fashion.Items[1].Fame + Config.Assets.motorbike.Fame)
+	eq("Đồ sở hữu theo tên", table.concat(view.Items, ","), Config.Shops.fashion.Items[1].Name)
+	eq("Tài sản thuê theo tên", table.concat(view.Assets, ","), Config.Assets.motorbike.Name)
+	eq("Điểm PvP làm tròn", view.Pvp.Rating, 1123)
+	eq("Danh hiệu đang gắn", view.EquippedTitle, "Đấu sĩ · Mùa 0")
+	eq("Đủ danh hiệu", #view.Titles, 2)
+	eq("Đỉnh tài sản ròng", view.PeakNetWorth, 4321)
+	check("Tài sản ròng gồm tiền + đồ + tài sản", view.NetWorth >= 777 + Config.Assets.motorbike.Price)
+	check("KHÔNG lộ tiền mặt", view.Money == nil)
+	check("KHÔNG lộ chỉ số, kỹ năng, lịch sử, hướng dẫn", view.Stats == nil and view.Skills == nil and view.History == nil and view.Guide == nil)
+	view.Titles[1] = "sua"
+	eq("Trả về bản sao, không phải bảng dữ liệu thật", dT.Titles[1], "Người có của · Mùa 0")
+
+	local V2 = loadNew(2604, "NguoiThu")
+	eq("Tham số chuỗi: nil", getPublic(V2, "2602"), nil)
+	eq("Tham số số lẻ: nil", getPublic(V2, 2602.5), nil)
+	eq("Tham số NaN: nil", getPublic(V2, 0 / 0), nil)
+	eq("Người không online: nil", getPublic(V2, 987654321), nil)
+	local V3 = loadNew(2605, "NguoiSpam")
+	local allowed = 0
+	for _ = 1, Config.RateLimits.GetPlayerProfile.Calls + 3 do
+		if getPublic(V3, 2602) ~= nil then allowed += 1 end
+	end
+	eq("Rate-limit GetPlayerProfile", allowed, Config.RateLimits.GetPlayerProfile.Calls)
+	-- Người đã rời máy chủ thì không xem được nữa
+	T.Parent = nil
+	local V4 = loadNew(2606, "NguoiSau")
+	eq("Người đã rời máy chủ: nil", getPublic(V4, 2602), nil)
+	T.Parent = PlayersService
+
+	for _, pl in { R, T, V1, V2, V3, V4 } do svc.Data:_release(pl) end
+end
+
+-- ═══════════════ Khu dân cư: lô đất hiện nhà và xe đang thuê (v0.8) ═══════════════
+do
+	local Estate = svc.Estate
+	local function plotPart(index)
+		return fakeBasePart(Vector3.new(-120, 0.5, index * 36), Vector3.new(4, 1, 4), { PlotIndex = index })
+	end
+	local p1, p2 = plotPart(1), plotPart(2)
+	Estate:_registerPlot(p2)
+	Estate:_registerPlot(p1)
+	Estate:_registerPlot(p1)
+	eq("Lô mới đăng ký: biển 'trống'", estateRenders[p1].Text, Config.Text.PlotEmpty)
+	eq("Đăng ký trùng không dựng lại", estateRenders[p1].Count, 1)
+	check("Lô trống không có chủ", estateRenders[p1].Owned == false and estateRenders[p1].House == nil)
+	local bad = fakeBasePart(Vector3.new(0, 0, 0), Vector3.new(4, 1, 4), { PlotIndex = "x" })
+	Estate:_registerPlot(bad)
+	eq("Lô thiếu PlotIndex hợp lệ bị bỏ qua", estateRenders[bad], nil)
+
+	-- Tài sản đắt nhất theo loại
+	local A, dA = loadNew(2701, "ChuNha", Vector3.new(0, 3, 0), 500)
+	eq("Chưa thuê gì: không có nhà", Estate:GetBest(dA, "house"), nil)
+	dA.Assets.boarding = { LeasedAt = 1, Missed = 0 }
+	dA.Assets.apartment = { LeasedAt = 1, Missed = 0 }
+	dA.Assets.motorbike = { LeasedAt = 1, Missed = 0 }
+	eq("Nhà đắt nhất", Estate:GetBest(dA, "house"), "apartment")
+	eq("Xe đắt nhất", Estate:GetBest(dA, "vehicle"), "motorbike")
+	dA.Assets.khong_co = { LeasedAt = 1, Missed = 0 }
+	eq("Id lạ trong dữ liệu bị bỏ qua", Estate:GetBest(dA, "house"), "apartment")
+	dA.Assets.khong_co = nil
+
+	-- Gán lô: lô trống số nhỏ nhất, có thông báo, dựng ngay
+	Estate:_assign(A)
+	eq("Người đầu nhận lô 1", Estate:GetPlotIndex(A), 1)
+	check("Có thông báo số lô", string.find(lastNotif(A), "Lô số 1", 1, true) ~= nil)
+	local r1 = estateRenders[p1]
+	check("Lô 1 hiện căn hộ và xe máy", r1.House == "apartment" and r1.Vehicle == "motorbike" and r1.Owned == true)
+	check("Biển ghi tên chủ và tài sản", string.find(r1.Text, "ChuNha", 1, true) ~= nil and string.find(r1.Text, Config.Assets.apartment.Name, 1, true) ~= nil)
+	Estate:_assign(A)
+	eq("Gán lại không đổi lô", Estate:GetPlotIndex(A), 1)
+
+	-- Chỉ dựng lại khi nhà / xe đổi
+	local count = r1.Count
+	svc.Replication:BuildSnapshot(A)
+	eq("Snapshot không đổi tài sản: không dựng lại", estateRenders[p1].Count, count)
+	dA.Money = 123
+	svc.Replication:BuildSnapshot(A)
+	eq("Đổi tiền không dựng lại lô", estateRenders[p1].Count, count)
+	dA.Assets.car = { LeasedAt = 1, Missed = 0 }
+	svc.Replication:BuildSnapshot(A)
+	eq("Thuê ô tô: lô đổi xe", estateRenders[p1].Vehicle, "car")
+	eq("Thuê ô tô: dựng lại đúng một lần", estateRenders[p1].Count, count + 1)
+	dA.Assets.apartment = nil
+	svc.Replication:BuildSnapshot(A)
+	eq("Trả căn hộ: còn phòng trọ", estateRenders[p1].House, "boarding")
+	dA.Assets = {}
+	svc.Replication:BuildSnapshot(A)
+	check("Trả hết: lô vẫn của mình nhưng trống", estateRenders[p1].House == nil and estateRenders[p1].Vehicle == nil and estateRenders[p1].Owned == true)
+	eq("Biển 'chưa thuê'", estateRenders[p1].Text, string.format(Config.Text.PlotBare, "ChuNha"))
+
+	-- Người thứ hai, thứ ba (hết lô)
+	local B, dB = loadNew(2702, "HangXom", Vector3.new(0, 3, 0), 500)
+	dB.Assets.villa = { LeasedAt = 1, Missed = 0 }
+	Estate:_assign(B)
+	eq("Người thứ hai nhận lô 2", Estate:GetPlotIndex(B), 2)
+	eq("Lô 2 hiện biệt thự", estateRenders[p2].House, "villa")
+	local C = loadNew(2703, "DenSau", Vector3.new(0, 3, 0), 500)
+	Estate:_assign(C)
+	eq("Hết lô: không có lô", Estate:GetPlotIndex(C), nil)
+	eq("Hết lô: có thông báo", lastNotif(C), Config.Text.PlotNone)
+	svc.Replication:BuildSnapshot(C)
+	check("Không có lô: snapshot vẫn dựng bình thường", svc.Replication:BuildSnapshot(C) ~= nil)
+
+	-- Rời game: trả lô, người sau nhận lại
+	Estate:_release(A)
+	eq("Rời game: mất lô", Estate:GetPlotIndex(A), nil)
+	check("Lô 1 về trạng thái trống", estateRenders[p1].Text == Config.Text.PlotEmpty and estateRenders[p1].Owned == false)
+	Estate:_release(A)
+	eq("Trả lô hai lần không lỗi", Estate:GetPlotIndex(A), nil)
+	Estate:_assign(C)
+	eq("Người chờ nhận lô vừa trống", Estate:GetPlotIndex(C), 1)
+	eq("Lô 2 không bị ảnh hưởng", estateRenders[p2].House, "villa")
+	-- Lô không cho tiền hay Nổi tiếng
+	eq("Có lô không đổi tiền", dB.Money, 500)
+
+	Estate:_release(B)
+	Estate:_release(C)
+	for _, pl in { A, B, C } do svc.Data:_release(pl) end
+end
+
+-- ═══════════════ Danh mục tài sản theo bậc giá (v0.9) ═══════════════
+do
+	local byKind = { house = {}, vehicle = {} }
+	for id, def in Config.Assets do
+		check("Tài sản " .. id .. " có loại hợp lệ", byKind[def.Kind] ~= nil)
+		check("Tài sản " .. id .. " có tên", type(def.Name) == "string" and def.Name ~= "")
+		check("Tài sản " .. id .. ": giá, phí, Nổi tiếng dương và nguyên", def.Price > 0 and def.FeePerCycle > 0 and def.Fame > 0 and def.Price % 1 == 0 and def.FeePerCycle % 1 == 0 and def.Fame % 1 == 0)
+		local ratio = def.FeePerCycle / def.Price
+		check("Tài sản " .. id .. ": phí mỗi chu kỳ khoảng 1% giá", ratio >= 0.009 and ratio <= 0.015, "ratio " .. ratio)
+		if byKind[def.Kind] then table.insert(byKind[def.Kind], def) end
+	end
+	check("Có ít nhất 6 loại nhà", #byKind.house >= 6)
+	check("Có ít nhất 6 loại xe", #byKind.vehicle >= 6)
+	for kind, list in byKind do
+		table.sort(list, function(a, b) return a.Price < b.Price end)
+		local topCommon = 0
+		for index = 2, #list do
+			check(kind .. ": không có hai món cùng giá (" .. list[index].Name .. ")", list[index].Price > list[index - 1].Price)
+			check(kind .. ": đắt hơn thì Nổi tiếng cao hơn (" .. list[index].Name .. ")", list[index].Fame > list[index - 1].Fame)
+		end
+		for _, def in list do
+			if not def.Stock then topCommon = math.max(topCommon, def.Price) end
+		end
+		for _, def in list do
+			if def.Stock then
+				check(kind .. ": hàng hiếm " .. def.Name .. " đắt hơn mọi hàng thường", def.Price > topCommon)
+				check(kind .. ": hàng hiếm có kho >= 1", def.Stock >= 1 and def.Stock % 1 == 0)
+			end
+		end
+	end
+	-- Món rẻ nhất mua được ngay từ đầu game bằng vài lượt làm
+	check("Xe rẻ nhất không quá 2 lần tiền khởi điểm", byKind.vehicle[1].Price <= Config.Economy.StartingMoney * 2)
+
+	-- Khu dân cư chọn đúng món đắt nhất trong danh mục mới
+	local data = { Assets = { bicycle = {}, scooter = {}, suv = {}, cottage = {}, townhouse = {} } }
+	eq("Xe đắt nhất đang thuê", svc.Estate:GetBest(data, "vehicle"), "suv")
+	eq("Nhà đắt nhất đang thuê", svc.Estate:GetBest(data, "house"), "townhouse")
+	data.Assets.supercar = {}
+	data.Assets.mansion = {}
+	eq("Có siêu xe thì hiện siêu xe", svc.Estate:GetBest(data, "vehicle"), "supercar")
+	eq("Có dinh thự thì hiện dinh thự", svc.Estate:GetBest(data, "house"), "mansion")
 end
 
 print(("KẾT QUẢ: %d đạt, %d lỗi"):format(passed, failed))

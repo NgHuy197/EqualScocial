@@ -71,6 +71,27 @@ export type PlayerData = {
 	PeakNetWorth: number, -- tài sản ròng cao nhất trong mùa (LeaderboardService cập nhật)
 	History: { SeasonRecord }, -- KHÔNG reset: hồ sơ các mùa trước, mới nhất ở cuối
 	Titles: { string }, -- KHÔNG reset: danh hiệu đã nhận, mới nhất ở cuối
+	-- v0.5
+	Cosmetics: CosmeticRecord, -- KHÔNG reset
+	SeasonJoinedAt: number, -- os.time() lần đầu vào game trong mùa này (0 = chưa ghi)
+	SeasonPlaySeconds: number, -- tổng thời gian chơi trong mùa (cho thưởng bắt kịp)
+	-- v0.6
+	Guide: GuideRecord, -- KHÔNG reset: tiến độ nhiệm vụ hướng dẫn
+}
+export type GuideRecord = {
+	Step: number, -- bước đang làm trong Config.Guide.Steps; lớn hơn số bước = đã xong
+}
+-- Lựa chọn trang trí (chuỗi rỗng = không gắn). Quyền sở hữu Game Pass do Roblox quản, không lưu ở đây.
+export type CosmeticRecord = {
+	Equipped: string, -- id trong Config.Cosmetics.Items
+	Title: string, -- một chuỗi trong Titles
+}
+export type CosmeticView = {
+	Id: string,
+	Name: string,
+	Owned: boolean,
+	Equipped: boolean,
+	GamePassId: number, -- 0 = chưa bán
 }
 
 export type SkillSnapshot = {
@@ -91,6 +112,7 @@ export type Snapshot = {
 	Owned: { [string]: boolean },
 	Assets: { [string]: number }, -- assetId -> số chu kỳ đang nợ phí duy trì (0 = đúng hạn)
 	Season: SeasonSnapshot,
+	Guide: string?, -- bước hướng dẫn đang làm ("(2/6) ..."); nil nếu đã xong
 }
 export type SeasonSnapshot = {
 	Name: string,
@@ -105,6 +127,26 @@ export type ProfileView = {
 	PeakNetWorth: number,
 	Titles: { string }, -- mới nhất ở cuối
 	History: { SeasonRecord }, -- mới nhất ở cuối
+	XPBoost: number, -- thưởng XP bắt kịp đang có (0 = không có)
+	BoostSecondsLeft: number,
+	Cosmetics: { CosmeticView },
+	EquippedTitle: string,
+}
+-- Hồ sơ CÔNG KHAI của một người chơi khác trong máy chủ (GetPlayerProfile): thứ để khoe, không có
+-- tiền mặt, chỉ số hay tiến độ riêng tư
+export type PublicProfileView = {
+	UserId: number,
+	Name: string,
+	Fame: number,
+	NetWorth: number,
+	Rank: number?,
+	SeasonName: string,
+	Pvp: PvpRecord,
+	PeakNetWorth: number,
+	Titles: { string }, -- mới nhất ở cuối
+	EquippedTitle: string,
+	Assets: { string }, -- tên tài sản đang thuê từ AURA
+	Items: { string }, -- tên đồ sở hữu vĩnh viễn
 }
 -- Trạng thái đấu trường của MỘT người chơi (server -> client qua PvpUpdate)
 export type PvpState = {

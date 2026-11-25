@@ -488,6 +488,8 @@ function PvpService:Attack(player: Player)
 
 	local damage = self:GetDamage(services.Skills:GetLevel(player, Config.Combat.Skill))
 	match.HP[opponent] = math.max(0, match.HP[opponent] - damage)
+	services.Replication:Effect(player, "hit", damage, target.Position)
+	services.Replication:Effect(opponent, "hurt", damage)
 	if match.HP[opponent] <= 0 then
 		finishMatch(match, player, "ko")
 	else

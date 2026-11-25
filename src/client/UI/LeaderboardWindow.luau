@@ -121,9 +121,10 @@ function LeaderboardWindow.new(
 	closeButton.TextColor3 = Theme.Colors.Text
 	closeButton.Parent = root
 	Theme.corner(closeButton, 8)
+	Theme.chrome(root, title, closeButton, Theme.Colors.Fame)
 
 	local status = Theme.label(root, "", 15, Theme.Colors.TextMuted)
-	status.Position = UDim2.fromOffset(16, 46)
+	status.Position = UDim2.fromOffset(18, 58)
 	status.Size = UDim2.new(1, -32, 0, 36)
 	status.TextWrapped = true
 	status.TextYAlignment = Enum.TextYAlignment.Top
@@ -132,8 +133,8 @@ function LeaderboardWindow.new(
 	list.Name = "Entries"
 	list.BackgroundTransparency = 1
 	list.BorderSizePixel = 0
-	list.Position = UDim2.fromOffset(12, 84)
-	list.Size = UDim2.new(1, -24, 1, -140)
+	list.Position = UDim2.fromOffset(12, 96)
+	list.Size = UDim2.new(1, -24, 1, -152)
 	list.CanvasSize = UDim2.new()
 	list.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	list.ScrollBarThickness = 6
@@ -272,7 +273,7 @@ function LeaderboardWindow.Open(self: LeaderboardWindow)
 	local root = getRootPart()
 	self.Anchor = findAnchor()
 	self.FallbackPosition = if root then root.Position else nil
-	self.Root.Visible = true
+	Theme.show(self.Root)
 
 	-- Đi xa thì tự đóng
 	self.Elapsed = 0

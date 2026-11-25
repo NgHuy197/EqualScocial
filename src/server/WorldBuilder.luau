@@ -1,17 +1,20 @@
 --!strict
 --[[
-	WorldBuilder — dựng map placeholder để nhấn Play là test được ngay.
+	WorldBuilder — dựng sẵn thị trấn của Equal Social bằng code để nhấn Play là chơi được ngay.
 
 	Nếu Workspace ĐÃ có `World` (Folder/Model do bạn tự làm) thì WorldBuilder không làm gì cả.
-	Các service gắn ProximityPrompt theo TAG, nên khi thay bằng model thật chỉ cần:
+	Các service gắn ProximityPrompt theo TAG, nên khi thay bằng map riêng chỉ cần:
 	  * gắn tag  Config.Tags.Job / Station / Shop / Class  (CollectionService)
 	  * đặt attribute  JobId / StationId / ShopId / ClassId  trùng với id trong Config
 	  * Bãi luyện tập: các điểm xuất hiện gắn tag MonsterSpawn + attribute MonsterId; Bệnh xá gắn tag
 	    Infirmary; bảng xếp hạng 3D gắn tag Leaderboard (LeaderboardService tự vẽ nội dung)
 	  * model có ít nhất một BasePart (prompt gắn vào PrimaryPart hoặc part đầu tiên)
 
-	Khối placeholder được xếp tự động theo Config.Jobs / Classes / Stations / Shops / Monsters (sắp theo id),
-	nên thêm nghề, lớp học, trạm, cửa hàng hay loại quái mới trong Config là tự có khối mới trên map.
+	Bố cục: quảng trường tròn ở giữa (điểm hồi sinh), bốn con đường vòng nối bốn dãy phố:
+	  tây = nghề, đông = trạm nghỉ + Trụ sở AURA + Khu tài sản, bắc = cửa hàng + Đấu trường,
+	  nam = bảng xếp hạng + trường học + Bãi luyện tập + Bệnh xá.
+	Công trình xếp tự động theo Config.Jobs / Classes / Stations / Shops (sắp theo id), nên thêm một mục
+	trong Config là tự có công trình mới trên map (hình dáng: server/World/Buildings).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -20,24 +23,35 @@ local Workspace = game:GetService("Workspace")
 
 local Calendar = require(ReplicatedStorage.Shared.Calendar)
 local Config = require(ReplicatedStorage.Shared.Config)
-local Format = require(ReplicatedStorage.Shared.Format)
 local Describe = require(script.Parent.Util.Describe)
+local Buildings = require(script.Parent.World.Buildings)
+local Environment = require(script.Parent.World.Environment)
+local Kit = require(script.Parent.World.Kit)
+local Landmarks = require(script.Parent.World.Landmarks)
+local Props = require(script.Parent.World.Props)
 
--- Họ font Source Sans hiển thị tốt dấu tiếng Việt
-local FONT_BOLD = Enum.Font.SourceSansBold
-local FONT_REGULAR = Enum.Font.SourceSans
+local P = Kit.Palette
+local World = Config.World
+
+local LABEL_HEIGHT = 6.5 -- nhãn nổi cách điểm tương tác ngần này studs
+local TREE_MIN_GAP = 9 -- khoảng cách tối thiểu giữa hai cây
 
 type Entry = {
 	Id: string,
-	Name: string,
-	ActionText: string,
-	HoldDuration: number,
-	Hint: string?, -- thay cho dòng gợi ý mặc định (ví dụ lớp học kèm ngày mở)
+	Name: string, -- tên trên nhãn nổi (nghề có điều kiện kèm "(cần ...)")
+	Sign: string, -- chữ trên biển hiệu
+	Hint: string,
 	Color: Color3?,
 	Size: Vector3?,
 }
 
+type Rect = { MinX: number, MaxX: number, MinZ: number, MaxZ: number }
+
 local WorldBuilder = {}
+
+-- Vùng đã có công trình / đường: cây rải ngẫu nhiên sẽ tránh các vùng này
+local reserved: { Rect } = {}
+local paveLayer = 0
 
 local function sortedIds(dictionary: { [string]: any }): { string }
 	local ids: { string } = {}
@@ -48,330 +62,281 @@ local function sortedIds(dictionary: { [string]: any }): { string }
 	return ids
 end
 
-local function newLabel(
+local function reserve(minX: number, maxX: number, minZ: number, maxZ: number)
+	table.insert(reserved, {
+		MinX = math.min(minX, maxX),
+		MaxX = math.max(minX, maxX),
+		MinZ = math.min(minZ, maxZ),
+		MaxZ = math.max(minZ, maxZ),
+	})
+end
+
+local function isFree(x: number, z: number, margin: number): boolean
+	for _, rect in reserved do
+		if
+			x > rect.MinX - margin
+			and x < rect.MaxX + margin
+			and z > rect.MinZ - margin
+			and z < rect.MaxZ + margin
+		then
+			return false
+		end
+	end
+	return true
+end
+
+-- Mảng lát đường hình chữ nhật (chỉ để nhìn: không va chạm). Mỗi mảng cao hơn mảng trước một chút
+-- để các mảng chồng nhau không bị nhấp nháy.
+local function pave(
 	parent: Instance,
-	text: string,
-	font: Enum.Font,
-	textSize: number
-): TextLabel
-	local label = Instance.new("TextLabel")
-	label.BackgroundTransparency = 1
-	label.Font = font
-	label.Text = text
-	label.TextSize = textSize
-	label.TextColor3 = Color3.new(1, 1, 1)
-	label.TextStrokeColor3 = Color3.new(0, 0, 0)
-	label.TextStrokeTransparency = 0.3
-	label.TextWrapped = true
-	label.Parent = parent
-	return label
+	name: string,
+	minX: number,
+	maxX: number,
+	minZ: number,
+	maxZ: number,
+	color: Color3?,
+	material: Enum.Material?
+)
+	paveLayer += 1
+	local lift = 0.004 * paveLayer
+	local center = Vector3.new((minX + maxX) / 2, 0, (minZ + maxZ) / 2)
+	local width, depth = math.abs(maxX - minX), math.abs(maxZ - minZ)
+	Kit.decor(
+		Kit.block(
+			parent,
+			name .. "Edge",
+			Vector3.new(width + 1.2, 0.2, depth + 1.2),
+			CFrame.new(center + Vector3.new(0, -0.07 + lift, 0)),
+			P.PathEdge,
+			Enum.Material.Concrete
+		)
+	)
+	Kit.decor(
+		Kit.block(
+			parent,
+			name,
+			Vector3.new(width, 0.2, depth),
+			CFrame.new(center + Vector3.new(0, -0.03 + lift, 0)),
+			color or P.Path,
+			material or Enum.Material.Concrete
+		)
+	)
+	reserve(minX, maxX, minZ, maxZ)
 end
 
--- Chữ tự co để vừa khung (tên dài như "Kỹ thuật viên (cần Khéo tay Lv.3)" không bị tràn)
-local function fitText(label: TextLabel, maxTextSize: number)
-	label.TextScaled = true
-	local constraint = Instance.new("UITextSizeConstraint")
-	constraint.MaxTextSize = maxTextSize
-	constraint.Parent = label
+-- ───────────────────────────── Mặt đất và ranh giới ─────────────────────────────
+
+local function buildGround(world: Instance)
+	local folder = Kit.folder(world, "Ground")
+	-- Template Studio có sẵn Baseplate (mặt trên ở y = 0): thảm cỏ đặt nhô lên một chút cho khỏi trùng mặt
+	local top = if Workspace:FindFirstChild("Baseplate") then 0.03 else 0
+	local size = World.SceneryGroundSize
+	local ground = Kit.block(
+		folder,
+		"Ground",
+		Vector3.new(size, 2, size),
+		CFrame.new(0, top - 1, 0),
+		P.Grass,
+		Enum.Material.Grass
+	)
+	ground.CastShadow = false
+
+	-- Tường vô hình quanh vùng chơi
+	local half = World.GroundSize / 2
+	local height = World.BoundaryHeight
+	for _, side in { -1, 1 } do
+		local wallX = Kit.zone(
+			folder,
+			"Boundary",
+			Vector3.new(2, height, World.GroundSize + 4),
+			CFrame.new(side * (half + 1), height / 2, 0)
+		)
+		wallX.CanCollide = true
+		local wallZ = Kit.zone(
+			folder,
+			"Boundary",
+			Vector3.new(World.GroundSize + 4, height, 2),
+			CFrame.new(0, height / 2, side * (half + 1))
+		)
+		wallZ.CanCollide = true
+	end
+
+	-- Đồi thấp phía xa cho đường chân trời đỡ trống
+	local random = Random.new(World.TreeSeed)
+	for index = 1, 14 do
+		local angle = index / 14 * math.pi * 2 + random:NextNumber(-0.15, 0.15)
+		local distance = random:NextNumber(half + 190, half + 420)
+		local diameter = random:NextNumber(220, 380)
+		local hill = Kit.ball(
+			folder,
+			"Hill",
+			diameter,
+			CFrame.new(math.cos(angle) * distance, -diameter * 0.34, math.sin(angle) * distance),
+			if index % 2 == 0 then P.GrassDark else P.Leaf,
+			Enum.Material.Grass
+		)
+		Kit.decor(hill)
+	end
 end
 
--- Nhãn nổi phía trên khối: dòng tên + dòng gợi ý
-local function addLabel(part: BasePart, title: string, subtitle: string)
-	local gui = Instance.new("BillboardGui")
-	gui.Name = "Label"
-	gui.Adornee = part
-	gui.Size = UDim2.fromOffset(340, 64)
-	gui.StudsOffsetWorldSpace = Vector3.new(0, part.Size.Y / 2 + 3, 0)
-	gui.AlwaysOnTop = true
-	gui.MaxDistance = Config.World.LabelMaxDistance
-	gui.Parent = part
+-- ───────────────────────────── Đường sá ─────────────────────────────
 
-	local titleLabel = newLabel(gui, title, FONT_BOLD, 24)
-	titleLabel.Size = UDim2.fromScale(1, 0.58)
-	fitText(titleLabel, 24)
-
-	local subtitleLabel = newLabel(gui, subtitle, FONT_REGULAR, 18)
-	subtitleLabel.Position = UDim2.fromScale(0, 0.58)
-	subtitleLabel.Size = UDim2.fromScale(1, 0.42)
-	subtitleLabel.TextColor3 = Color3.fromRGB(215, 220, 230)
-	fitText(subtitleLabel, 18)
+-- Tim bốn con đường vòng (trước mặt bốn dãy phố)
+local function streetCenters(): (number, number, number, number)
+	local west = World.JobsOrigin.X + World.StreetOffset
+	local east = World.StationsOrigin.X - World.StreetOffset
+	local north = World.ShopsOrigin.Z + World.StreetOffset
+	local south = World.SchoolOrigin.Z - World.StreetOffset
+	return west, east, north, south
 end
 
-local function newBlock(name: string, size: Vector3, position: Vector3, color: Color3): Part
-	local part = Instance.new("Part")
-	part.Name = name
-	part.Anchored = true
-	part.Size = size
-	part.Position = position
-	part.Color = color
-	part.Material = Enum.Material.SmoothPlastic
-	return part
+local function buildStreets(world: Instance)
+	local folder = Kit.folder(world, "Streets")
+	local half = World.StreetWidth / 2
+	local radius = World.PlazaRadius
+	local west, east, north, south = streetCenters()
+
+	-- Bốn đường vòng
+	pave(folder, "StreetWest", west - half, west + half, north - half, south + half)
+	pave(folder, "StreetEast", east - half, east + half, north - half, south + half)
+	pave(folder, "StreetNorth", west - half, east + half, north - half, north + half)
+	pave(folder, "StreetSouth", west - half, east + half, south - half, south + half)
+
+	-- Bốn lối từ quảng trường ra đường vòng
+	local spoke = 4
+	pave(folder, "SpokeWest", west + half, -radius + 2, -spoke, spoke)
+	pave(folder, "SpokeEast", radius - 2, east - half, -spoke, spoke)
+	pave(folder, "SpokeNorth", -spoke, spoke, north + half, -radius + 2)
+	pave(folder, "SpokeSouth", -spoke, spoke, radius - 2, south - half)
+	reserve(-radius - 3, radius + 3, -radius - 3, radius + 3)
+
+	-- Sân bảng xếp hạng (bảng đứng giữa lối nam nên lát rộng để đi vòng hai bên)
+	local board = World.LeaderboardOrigin
+	local boardHalf = World.LeaderboardSize.X / 2 + 10
+	pave(
+		folder,
+		"BoardSquare",
+		board.X - boardHalf,
+		board.X + boardHalf,
+		board.Z - 15,
+		south - half,
+		P.Plaza,
+		Enum.Material.Cobblestone
+	)
+
+	-- Lối bắc tới quầy Đấu trường (đi giữa hai cửa hàng)
+	local kiosk = World.ArenaOrigin + World.ArenaKioskOffset
+	pave(folder, "ArenaWalk", -spoke, spoke, kiosk.Z + 6, north - half)
+	pave(
+		folder,
+		"ArenaForecourt",
+		-16,
+		16,
+		World.ArenaOrigin.Z + World.ArenaFloorSize / 2 - 2,
+		kiosk.Z + 8,
+		P.Plaza,
+		Enum.Material.Cobblestone
+	)
+
+	-- Lối nam tới cổng Bãi luyện tập (đi giữa các lớp học)
+	local zone = World.MonsterZoneOrigin
+	pave(folder, "TrainingWalk", -spoke, spoke, south + half, zone.Z - World.MonsterZoneSize / 2)
+
+	-- Đường tới Bệnh xá: kéo dài đường nam sang tây rồi rẽ xuống
+	local infirmary = World.InfirmaryOrigin
+	pave(folder, "InfirmaryRoad", infirmary.X - spoke, west - half, south - spoke, south + spoke)
+	pave(
+		folder,
+		"InfirmaryWalk",
+		infirmary.X - spoke,
+		infirmary.X + spoke,
+		south + spoke,
+		infirmary.Z - World.InfirmarySize.Z / 2 - 10
+	)
+
+	-- Sảnh trước Trụ sở AURA và lối sang Khu tài sản
+	local aura = World.AuraOrigin
+	pave(
+		folder,
+		"AuraForecourt",
+		east + half,
+		aura.X - World.AuraSize.Z / 2,
+		aura.Z - World.AuraSize.X / 2 - 2,
+		aura.Z + World.AuraSize.X / 2 + 2,
+		P.Plaza,
+		Enum.Material.Cobblestone
+	)
+
+	-- Đèn đường dọc mép trong của đường vòng
+	local inner = half + 1.6
+	for _, z in { north + 12, -18, 18, south - 12 } do
+		Props.lamp(folder, Vector3.new(west + inner, 0, z))
+		Props.lamp(folder, Vector3.new(east - inner, 0, z))
+	end
+	for _, x in { -18, 18 } do
+		Props.lamp(folder, Vector3.new(x, 0, north + inner))
+		Props.lamp(folder, Vector3.new(x, 0, south - inner))
+	end
 end
 
--- Xếp một nhóm khối thành hàng dọc theo `axis`, căn giữa quanh `origin`
+-- ───────────────────────────── Dãy công trình theo Config ─────────────────────────────
+
+-- Xếp một nhóm công trình thành hàng dọc theo `axis`, căn giữa quanh `origin`, mặt tiền quay về `facing`
 local function placeGroup(
-	world: Folder,
+	world: Instance,
 	groupName: string,
 	entries: { Entry },
 	origin: Vector3,
 	axis: Vector3,
+	facing: Vector3,
 	tag: string,
 	attribute: string
 )
-	local folder = Instance.new("Folder")
-	folder.Name = groupName
-	folder.Parent = world
-
+	local folder = Kit.folder(world, groupName)
 	local count = #entries
 	for index, entry in entries do
-		local size = entry.Size or Config.World.DefaultSize
-		local offset = axis * ((index - (count + 1) / 2) * Config.World.Spacing)
-		local position = origin + offset + Vector3.new(0, size.Y / 2, 0)
-
-		local part = newBlock(entry.Id, size, position, entry.Color or Config.World.DefaultColor)
-		part:SetAttribute(attribute, entry.Id)
-
-		local hintFormat = if entry.HoldDuration > 0
-			then Config.Text.WorldHintHold
-			else Config.Text.WorldHintTap
-		addLabel(part, entry.Name, entry.Hint or string.format(hintFormat, entry.ActionText))
-
-		part.Parent = folder
+		local size = entry.Size or World.DefaultSize
+		local position = origin + axis * ((index - (count + 1) / 2) * World.Spacing)
+		local anchor = Buildings.Build(folder, {
+			Id = entry.Id,
+			Base = CFrame.lookAt(position, position + facing),
+			Size = size,
+			Color = entry.Color or World.DefaultColor,
+			Title = entry.Sign,
+		})
+		anchor:SetAttribute(attribute, entry.Id)
+		Kit.label(anchor, entry.Name, entry.Hint, LABEL_HEIGHT)
 		-- Gắn tag SAU khi đã vào Workspace và đã có attribute
-		CollectionService:AddTag(part, tag)
-	end
-end
+		CollectionService:AddTag(anchor, tag)
 
--- Trụ sở AURA: nhấn E để mở cửa sổ Tài sản / Đấu giá / Báo cáo (AuraService gắn prompt theo tag)
-local function buildAuraHq(world: Folder)
-	local size = Config.World.AuraSize
-	local origin = Config.World.AuraOrigin
-	local block = newBlock(
-		"AuraHq",
-		size,
-		origin + Vector3.new(0, size.Y / 2, 0),
-		Color3.fromRGB(86, 64, 150)
-	)
-	addLabel(
-		block,
-		Config.Text.AuraLabel,
-		string.format(Config.Text.WorldHintTap, Config.Text.AuraPrompt)
-	)
-	block.Parent = world
-	CollectionService:AddTag(block, Config.Tags.Aura)
-end
-
--- Đấu trường: sàn đấu, hai bục xuất phát (tag ArenaPad + PadIndex) và quầy hàng chờ (tag Arena)
-local function buildArena(world: Folder)
-	local folder = Instance.new("Folder")
-	folder.Name = "Arena"
-	folder.Parent = world
-
-	local origin = Config.World.ArenaOrigin
-	local floorSize = Config.World.ArenaFloorSize
-	local floor = newBlock(
-		"ArenaFloor",
-		Vector3.new(floorSize, 0.4, floorSize),
-		origin + Vector3.new(0, 0.2, 0),
-		Color3.fromRGB(205, 180, 140)
-	)
-	floor.Material = Enum.Material.Sand
-	floor.CanCollide = false
-	floor.Parent = folder
-
-	for index = 1, 2 do
-		local side = if index == 1 then -1 else 1
-		local pad = newBlock(
-			`ArenaPad{index}`,
-			Vector3.new(6, 1, 6),
-			origin + Vector3.new(side * Config.World.ArenaPadOffset, 0.5, 0),
-			if index == 1 then Color3.fromRGB(220, 90, 90) else Color3.fromRGB(80, 130, 220)
+		-- Chừa chỗ cho công trình và khoảng sân trước mặt
+		local halfWidth, halfDepth = size.X / 2 + 5, size.Z / 2 + 2
+		local back = position - facing * halfDepth
+		local front = position + facing * (halfDepth + 8)
+		local side = axis * halfWidth
+		reserve(
+			math.min(back.X, front.X) - math.abs(side.X),
+			math.max(back.X, front.X) + math.abs(side.X),
+			math.min(back.Z, front.Z) - math.abs(side.Z),
+			math.max(back.Z, front.Z) + math.abs(side.Z)
 		)
-		pad:SetAttribute(Config.Attributes.ArenaPad, index)
-		pad.Parent = folder
-		CollectionService:AddTag(pad, Config.Tags.ArenaPad)
 	end
-
-	local kioskSize = Vector3.new(10, 7, 6)
-	local kiosk = newBlock(
-		"ArenaKiosk",
-		kioskSize,
-		origin + Config.World.ArenaKioskOffset + Vector3.new(0, kioskSize.Y / 2, 0),
-		Color3.fromRGB(120, 70, 50)
-	)
-	addLabel(
-		kiosk,
-		Config.Text.ArenaLabel,
-		string.format(Config.Text.WorldHintTap, Config.Text.ArenaPrompt)
-	)
-	kiosk.Parent = folder
-	CollectionService:AddTag(kiosk, Config.Tags.Arena)
 end
 
--- Bảng xếp hạng 3D ở quảng trường. LeaderboardService tự vẽ nội dung lên mặt trước (-Z) của part này.
-local function buildLeaderboard(world: Folder)
-	local size = Config.World.LeaderboardSize
-	local origin = Config.World.LeaderboardOrigin
-	local board = newBlock(
-		"Leaderboard",
-		size,
-		origin + Vector3.new(0, size.Y / 2, 0),
-		Color3.fromRGB(24, 28, 38)
-	)
-	board.Parent = world
-	CollectionService:AddTag(board, Config.Tags.Leaderboard)
+local function hint(holdDuration: number, actionText: string): string
+	local format = if holdDuration > 0 then Config.Text.WorldHintHold else Config.Text.WorldHintTap
+	return string.format(format, actionText)
 end
 
--- Bệnh xá: nơi hồi sinh khi bị quái đánh bại
-local function buildInfirmary(world: Folder)
-	local size = Config.World.InfirmarySize
-	local origin = Config.World.InfirmaryOrigin
-	local block = newBlock(
-		"Infirmary",
-		size,
-		origin + Vector3.new(0, size.Y / 2, 0),
-		Color3.fromRGB(235, 240, 245)
-	)
-	addLabel(block, Config.Text.InfirmaryLabel, Config.Text.InfirmaryHint)
-	block.Parent = world
-	CollectionService:AddTag(block, Config.Tags.Infirmary)
-end
-
--- Bãi luyện tập: mảng sàn, biển báo và các điểm xuất hiện của quái xếp thành vòng tròn
-local function buildMonsterZone(world: Folder): number
-	local folder = Instance.new("Folder")
-	folder.Name = "MonsterZone"
-	folder.Parent = world
-
-	local origin = Config.World.MonsterZoneOrigin
-	local zoneSize = Config.World.MonsterZoneSize
-
-	local floorPad = newBlock(
-		"Floor",
-		Vector3.new(zoneSize, 0.4, zoneSize),
-		origin + Vector3.new(0, 0.2, 0),
-		Color3.fromRGB(214, 190, 140)
-	)
-	floorPad.Material = Enum.Material.Sand
-	floorPad.Parent = folder
-
-	local sign = newBlock(
-		"Sign",
-		Vector3.new(10, 1, 1),
-		origin + Vector3.new(0, 5, -zoneSize / 2),
-		Color3.fromRGB(60, 64, 80)
-	)
-	addLabel(sign, Config.Text.MonsterZoneLabel, Config.Text.MonsterZoneHint)
-	sign.Parent = folder
-
-	-- Mỗi loại quái có SpawnPoints điểm; xen kẽ các loại quanh vòng tròn cho đều
-	local plan: { { Key: number, Id: string } } = {}
-	for _, id in sortedIds(Config.Monsters) do
-		local def = Config.Monsters[id]
-		for index = 1, def.SpawnPoints do
-			table.insert(plan, { Key = (index - 0.5) / def.SpawnPoints, Id = id })
-		end
-	end
-	table.sort(plan, function(a, b)
-		if a.Key ~= b.Key then
-			return a.Key < b.Key
-		end
-		return a.Id < b.Id
-	end)
-
-	for index, item in plan do
-		local angle = (index - 1) / #plan * math.pi * 2
-		local offset = Vector3.new(
-			math.cos(angle) * Config.World.MonsterZoneRadius,
-			0,
-			math.sin(angle) * Config.World.MonsterZoneRadius
-		)
-		-- Điểm xuất hiện là một tấm mỏng nằm trên sàn bãi (mặt trên sàn cao 0.4)
-		local point = newBlock(
-			`Spawn_{item.Id}_{index}`,
-			Vector3.new(5, 0.2, 5),
-			origin + offset + Vector3.new(0, 0.5, 0),
-			Config.Monsters[item.Id].Color
-		)
-		point.Transparency = 0.5
-		point.CanCollide = false
-		point:SetAttribute(Config.Attributes.Monster, item.Id)
-		point.Parent = folder
-		CollectionService:AddTag(point, Config.Tags.MonsterSpawn)
-	end
-	return #plan
-end
-
-function WorldBuilder.Build()
-	if Workspace:FindFirstChild(Config.World.FolderName) then
-		print(
-			`[WorldBuilder] Đã có '{Config.World.FolderName}' trong Workspace -> dùng map có sẵn.`
-		)
-		return
-	end
-
-	local world = Instance.new("Folder")
-	world.Name = Config.World.FolderName
-	world.Parent = Workspace
-
-	-- Mặt đất (bỏ qua nếu template Studio đã có Baseplate, tránh hai mặt phẳng chồng nhau)
-	if not Workspace:FindFirstChild("Baseplate") then
-		local ground = newBlock(
-			"Ground",
-			Vector3.new(Config.World.GroundSize, 1, Config.World.GroundSize),
-			Vector3.new(0, -0.5, 0),
-			Color3.fromRGB(96, 140, 88)
-		)
-		ground.Material = Enum.Material.Grass
-		ground.Parent = world
-	end
-
-	-- Điểm hồi sinh (bỏ qua nếu map đã có SpawnLocation)
-	if not Workspace:FindFirstChildWhichIsA("SpawnLocation", true) then
-		local spawn = Instance.new("SpawnLocation")
-		spawn.Name = "Spawn"
-		spawn.Anchored = true
-		spawn.Neutral = true
-		spawn.Duration = 0
-		spawn.Size = Vector3.new(12, 1, 12)
-		spawn.Position = Vector3.new(0, 0.5, 0)
-		spawn.Color = Color3.fromRGB(210, 210, 215)
-		spawn.Material = Enum.Material.SmoothPlastic
-		spawn.Parent = world
-	end
-
-	-- Biển chào mừng
-	local sign = newBlock(
-		"WelcomeSign",
-		Vector3.new(14, 1, 1),
-		Vector3.new(0, 6, 20),
-		Color3.fromRGB(60, 64, 80)
-	)
-	local signGui = Instance.new("BillboardGui")
-	signGui.Adornee = sign
-	signGui.Size = UDim2.fromOffset(380, 90)
-	signGui.StudsOffsetWorldSpace = Vector3.new(0, 3, 0)
-	signGui.AlwaysOnTop = true
-	signGui.MaxDistance = Config.World.LabelMaxDistance * 2
-	signGui.Parent = sign
-	local signLabel = newLabel(
-		signGui,
-		string.format(Config.Text.WelcomeSign, Format.money(Config.Economy.StartingMoney)),
-		FONT_BOLD,
-		22
-	)
-	signLabel.Size = UDim2.fromScale(1, 1)
-	sign.Parent = world
-
-	-- Nghề
+local function buildDistricts(world: Instance): (number, number, number, number)
 	local jobs: { Entry } = {}
 	for _, id in sortedIds(Config.Jobs) do
 		local def = Config.Jobs[id]
 		table.insert(jobs, {
 			Id = id,
 			Name = Describe.JobTitle(def), -- nghề có điều kiện hiện kèm "(cần ...)"
-			ActionText = def.ActionText,
-			HoldDuration = def.HoldDuration,
+			Sign = def.Name,
+			Hint = hint(def.HoldDuration, def.ActionText),
 			Color = def.Color,
 			Size = def.Size,
 		})
@@ -380,21 +345,21 @@ function WorldBuilder.Build()
 		world,
 		"Jobs",
 		jobs,
-		Config.World.JobsOrigin,
-		Vector3.new(0, 0, 1),
+		World.JobsOrigin,
+		Vector3.zAxis,
+		Vector3.xAxis,
 		Config.Tags.Job,
 		Config.Attributes.Job
 	)
 
-	-- Trạm miễn phí
 	local stations: { Entry } = {}
 	for _, id in sortedIds(Config.Stations) do
 		local def = Config.Stations[id]
 		table.insert(stations, {
 			Id = id,
 			Name = def.Name,
-			ActionText = def.ActionText,
-			HoldDuration = def.HoldDuration,
+			Sign = def.Name,
+			Hint = hint(def.HoldDuration, def.ActionText),
 			Color = def.Color,
 			Size = def.Size,
 		})
@@ -403,8 +368,9 @@ function WorldBuilder.Build()
 		world,
 		"Stations",
 		stations,
-		Config.World.StationsOrigin,
-		Vector3.new(0, 0, 1),
+		World.StationsOrigin,
+		Vector3.zAxis,
+		-Vector3.xAxis,
 		Config.Tags.Station,
 		Config.Attributes.Station
 	)
@@ -416,8 +382,8 @@ function WorldBuilder.Build()
 		table.insert(shops, {
 			Id = id,
 			Name = def.Name,
-			ActionText = def.ActionText,
-			HoldDuration = 0,
+			Sign = def.Name,
+			Hint = hint(0, def.ActionText),
 			Color = def.Color,
 			Size = def.Size,
 		})
@@ -426,21 +392,21 @@ function WorldBuilder.Build()
 		world,
 		"Shops",
 		shops,
-		Config.World.ShopsOrigin,
-		Vector3.new(1, 0, 0),
+		World.ShopsOrigin,
+		Vector3.xAxis,
+		Vector3.zAxis,
 		Config.Tags.Shop,
 		Config.Attributes.Shop
 	)
 
-	-- Trường học: các lớp xếp dọc trục X, nhãn ghi kèm ngày mở cửa
+	-- Trường học: nhãn ghi kèm ngày mở cửa
 	local classes: { Entry } = {}
 	for _, id in sortedIds(Config.Classes) do
 		local def = Config.Classes[id]
 		table.insert(classes, {
 			Id = id,
 			Name = def.Name,
-			ActionText = def.ActionText,
-			HoldDuration = def.HoldDuration,
+			Sign = def.Name,
 			Hint = string.format(
 				Config.Text.WorldHintClass,
 				def.ActionText,
@@ -454,20 +420,192 @@ function WorldBuilder.Build()
 		world,
 		"School",
 		classes,
-		Config.World.SchoolOrigin,
-		Vector3.new(1, 0, 0),
+		World.SchoolOrigin,
+		Vector3.xAxis,
+		-Vector3.zAxis,
 		Config.Tags.Class,
 		Config.Attributes.Class
 	)
+	return #jobs, #classes, #stations, #shops
+end
 
-	buildLeaderboard(world)
-	buildAuraHq(world)
-	buildArena(world)
-	buildInfirmary(world)
-	local spawnCount = buildMonsterZone(world)
+-- ───────────────────────────── Cây cối ─────────────────────────────
+
+local function scatterTrees(world: Instance)
+	local folder = Kit.folder(world, "Nature")
+	local random = Random.new(World.TreeSeed)
+	local limit = World.GroundSize / 2 - 8
+	local placed: { Vector3 } = {}
+
+	local function farFromOthers(position: Vector3): boolean
+		for _, other in placed do
+			if (other - position).Magnitude < TREE_MIN_GAP then
+				return false
+			end
+		end
+		return true
+	end
+
+	local function plant(position: Vector3)
+		local roll = random:NextNumber()
+		local scale = random:NextNumber(0.85, 1.35)
+		if roll < 0.55 then
+			Props.tree(folder, position, scale, random:NextInteger(0, 2))
+		elseif roll < 0.85 then
+			Props.pine(folder, position, scale)
+		elseif roll < 0.95 then
+			Props.bush(folder, position, scale)
+		else
+			Props.rock(folder, position, scale, random:NextInteger(1, 1000))
+		end
+		table.insert(placed, position)
+	end
+
+	-- Trong vùng chơi: thử vị trí ngẫu nhiên, bỏ qua chỗ có công trình hoặc đường
+	local attempts = 0
+	while #placed < World.TreeCount and attempts < World.TreeCount * 30 do
+		attempts += 1
+		local position =
+			Vector3.new(random:NextNumber(-limit, limit), 0, random:NextNumber(-limit, limit))
+		if isFree(position.X, position.Z, 5) and farFromOthers(position) then
+			plant(position)
+		end
+	end
+
+	-- Ngoài tường vô hình: một vành rừng cho map có chiều sâu
+	local half = World.GroundSize / 2
+	for index = 1, 70 do
+		local angle = index / 70 * math.pi * 2 + random:NextNumber(-0.04, 0.04)
+		local distance = random:NextNumber(half * 1.45, half * 2.3)
+		plant(Vector3.new(math.cos(angle) * distance, 0, math.sin(angle) * distance))
+	end
+end
+
+-- Hồ, đài phun và vài chi tiết công viên ở những khoảng trống cố định
+local function buildParks(world: Instance)
+	local folder = Kit.folder(world, "Parks")
+	local west, east, north, south = streetCenters()
+
+	-- Hồ nước ở góc đông bắc (sau dãy trạm nghỉ)
+	local pond = Vector3.new(east + 52, 0, north - 30)
+	Props.pond(folder, pond, 16)
+	reserve(pond.X - 20, pond.X + 20, pond.Z - 20, pond.Z + 20)
+	Props.bench(folder, CFrame.lookAt(pond + Vector3.new(-21, 0, 6), pond))
+	Props.bench(folder, CFrame.lookAt(pond + Vector3.new(6, 0, 22), pond))
+
+	-- Đài phun nước ở hai vườn nhỏ giữa quảng trường và đường vòng (góc tây bắc và đông nam)
+	for _, corner in
+		{ Vector3.new(west + 14, 0, north + 14), Vector3.new(east - 13, 0, south - 20) }
+	do
+		Props.fountain(folder, corner)
+		reserve(corner.X - 8, corner.X + 8, corner.Z - 8, corner.Z + 8)
+	end
+	-- Hai vườn còn lại: bồn hoa lớn
+	for index, corner in
+		{ Vector3.new(east - 14, 0, north + 14), Vector3.new(west + 13, 0, south - 20) }
+	do
+		Props.flowerBed(folder, CFrame.new(corner), 10, 6, 50 + index)
+		-- Cây đứng về phía quảng trường để không lấn ra đường
+		Props.tree(folder, corner - Vector3.new(0, 0, math.sign(corner.Z) * 8), 1.1, index)
+		reserve(corner.X - 8, corner.X + 8, corner.Z - 12, corner.Z + 12)
+	end
+end
+
+-- ───────────────────────────── Build ─────────────────────────────
+
+function WorldBuilder.Build()
+	if Workspace:FindFirstChild(World.FolderName) then
+		print(
+			`[WorldBuilder] Đã có '{World.FolderName}' trong Workspace -> dùng map có sẵn.`
+		)
+		return
+	end
+
+	table.clear(reserved)
+	paveLayer = 0
+
+	local world = Instance.new("Folder")
+	world.Name = World.FolderName
+	world.Parent = Workspace
+
+	-- Bỏ qua điểm hồi sinh nếu map đã có SpawnLocation
+	local hasSpawn = Workspace:FindFirstChildWhichIsA("SpawnLocation", true) ~= nil
+
+	buildGround(world)
+	buildStreets(world)
+	Landmarks.Plaza(world, hasSpawn)
+	Landmarks.WelcomeArch(world)
+
+	local jobCount, classCount, stationCount, shopCount = buildDistricts(world)
+
+	Landmarks.Leaderboard(world)
+	Landmarks.AuraHq(world, -Vector3.xAxis)
+	Landmarks.Arena(world)
+	Landmarks.Infirmary(world)
+	local spawnCount = Landmarks.MonsterZone(world)
+	local showcaseFront = Landmarks.Showcase(world, -Vector3.xAxis)
+	Landmarks.Residences(world, Vector3.xAxis)
+
+	-- Chừa chỗ cho các công trình lớn trước khi rải cây
+	local aura = World.AuraOrigin
+	reserve(aura.X - 14, aura.X + 14, aura.Z - 16, aura.Z + 16)
+	local arena = World.ArenaOrigin
+	local arenaHalf = World.ArenaFloorSize / 2 + 24
+	reserve(arena.X - arenaHalf, arena.X + arenaHalf, arena.Z - arenaHalf, arena.Z + arenaHalf + 16)
+	local infirmary = World.InfirmaryOrigin
+	reserve(infirmary.X - 14, infirmary.X + 14, infirmary.Z - 20, infirmary.Z + 12)
+	local zone = World.MonsterZoneOrigin
+	local zoneHalf = World.MonsterZoneSize / 2 + 3
+	reserve(zone.X - zoneHalf, zone.X + zoneHalf, zone.Z - zoneHalf, zone.Z + zoneHalf)
+	-- Khu tài sản: lối từ đường đông tới cổng, và chừa cả sân trưng bày
+	local showcase = World.ShowcaseOrigin
+	local showcaseHalf = World.Showcase.PerRow * World.Showcase.Spacing / 2 + 6
+	local eastStreet = World.StationsOrigin.X - World.StreetOffset
+	local streetFolder = world:FindFirstChild("Streets") or world
+	pave(
+		streetFolder,
+		"ShowcaseWalk",
+		eastStreet + World.StreetWidth / 2,
+		showcase.X - showcaseFront,
+		showcase.Z - 4,
+		showcase.Z + 4
+	)
+	reserve(
+		showcase.X - showcaseFront - 2,
+		showcase.X + showcaseFront + 2,
+		showcase.Z - showcaseHalf,
+		showcase.Z + showcaseHalf
+	)
+
+	-- Khu dân cư: dãy lô, đường trước mặt và lối nối ra phố nghề (đi qua khe giữa các nhà)
+	local residence = World.ResidenceOrigin
+	local plotLayout = World.Plot
+	local rowHalf = plotLayout.Count * plotLayout.Spacing / 2
+	local roadX = residence.X + plotLayout.Depth / 2 + 6
+	local west = World.JobsOrigin.X + World.StreetOffset
+	local streets = world:FindFirstChild("Streets") or world
+	pave(
+		streets,
+		"ResidenceRoad",
+		roadX - 4,
+		roadX + 4,
+		residence.Z - rowHalf,
+		residence.Z + rowHalf
+	)
+	pave(streets, "ResidenceWalk", roadX + 4, west - World.StreetWidth / 2, -3, 3)
+	reserve(
+		residence.X - plotLayout.Depth / 2 - 2,
+		roadX + 4,
+		residence.Z - rowHalf - 2,
+		residence.Z + rowHalf + 2
+	)
+
+	buildParks(world)
+	scatterTrees(world)
+	Environment.Apply()
 
 	print(
-		`[WorldBuilder] Đã dựng map placeholder: {#jobs} nghề, {#classes} lớp học, {#stations} trạm, {#shops} cửa hàng, {spawnCount} điểm xuất hiện quái.`
+		`[WorldBuilder] Đã dựng map: {jobCount} nghề, {classCount} lớp học, {stationCount} trạm, {shopCount} cửa hàng, {spawnCount} điểm xuất hiện quái.`
 	)
 end
 

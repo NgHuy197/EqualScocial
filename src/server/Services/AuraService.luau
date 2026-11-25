@@ -116,6 +116,7 @@ function AuraService:Start()
 			Cooldown = Config.Aura.OpenCooldown,
 			OnTriggered = function(player: Player)
 				OpenAura:FireClient(player)
+				services.Guide:Report(player, "aura")
 			end,
 		}
 	end)

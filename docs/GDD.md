@@ -1,8 +1,8 @@
 # Equal Social — Game Design Document
 
-Phiên bản tài liệu: 0.4 (khớp bản v0.4: MVP + trường học, đánh quái, bảng xếp hạng + AURA + PvP và Season) · Tên game tạm: **Equal Social** · AI cai quản: **AURA**
+Phiên bản tài liệu: 0.9 (khớp bản v0.9: v0.8 + danh mục tài sản theo bậc giá) · Tên game tạm: **Equal Social** · AI cai quản: **AURA**
 
-> Mọi con số trong tài liệu này là giá trị trong `src/shared/Config.luau`. Khi đổi số liệu, sửa Config **và** cập nhật bảng ở đây. Mục 4 (v0.1), 6 (v0.2), 7 (v0.3) và 8.0–8.2 (v0.4) **đã được cài đặt**; 8.3 (monetization) là bản nháp.
+> Mọi con số trong tài liệu này là giá trị trong `src/shared/Config.luau`. Khi đổi số liệu, sửa Config **và** cập nhật bảng ở đây. Mục 4 (v0.1), 6 (v0.2), 7 (v0.3), 8.0–8.2 (v0.4), phần "Đã làm" của 8.3 (v0.5), 8b (v0.6), 8c (v0.7) và 8d (v0.8) **đã được cài đặt**.
 
 ## 1. Tầm nhìn
 
@@ -111,6 +111,7 @@ Không có bệnh tật, không mất kỹ năng, không mất đồ.
 
 - **Lương thực nhận = lương gốc × (1 + 0,1 × level kỹ năng)**, làm tròn; level tính trước khi cộng XP của lượt đó. Kho hàng: $12 (Lv0) → $18 (Lv5) → $24 (Lv10) → $36 (Lv20). Quán cà phê: $10 → $15 → $20 → $30.
 - Mỗi lượt +**10 XP**.
+- **Làm ca chung** (v0.5): mỗi người *khác* cùng nghề đã xong một lượt trong 20 giây gần đây và làm ở chỗ cách ≤ 40 studs thì lương lượt này **+10%**, tối đa **+30%** (3 người). Toast ghi "làm chung với N người (+X% lương)". Không có chuyển tiền giữa người chơi, nên không mở đường cho nuôi tài khoản phụ (câu hỏi 13). Nhân với hệ số sự kiện AURA nếu có.
 - **Năng lượng < 15** thì không cho làm việc (báo ngay khi bắt đầu giữ phím và khi hoàn thành).
 - Cooldown phía server cho mỗi người chơi trên mỗi prompt = HoldDuration × 0,85 (chặn exploit bỏ qua thời gian giữ phím; người chơi bình thường không bị ảnh hưởng).
 
@@ -184,7 +185,15 @@ Có thêm trong v0.3 (xem mục 7): Trụ sở AURA, tài sản thuê (nhà, xe)
 
 Có thêm trong v0.4 (xem mục 8): Đấu trường 1v1 có luật và điểm Elo, Season (về vạch xuất phát, lịch sử, danh hiệu).
 
-Chưa có: cosmetic bán bằng Robux, tương tác trực tiếp giữa người chơi (trao đổi, chat bubble tùy biến...).
+Có thêm trong v0.5: làm ca chung, thu hồi tài sản hiếm khi vắng mặt, bắt kịp giữa mùa, cosmetic Game Pass.
+
+Có thêm trong v0.6 (xem mục 8b): thị trấn dựng sẵn, ngày đêm, giao diện mới, hướng dẫn người mới, Nổi tiếng trên bảng tên.
+
+Có thêm trong v0.7 (xem mục 8c): quái di chuyển, số bay và âm thanh, hồ sơ công khai của người chơi khác.
+
+Có thêm trong v0.8 (xem mục 8d): Khu dân cư hiện nhà và xe đang thuê của từng người.
+
+Chưa có: tương tác trực tiếp giữa người chơi (trao đổi, hội nhóm), nhạc nền (đã có chỗ cấu hình, chưa có bài), hoạt ảnh nhân vật khi làm việc, PvP theo đội.
 
 ## 6. v0.2 — Học tập, đánh quái, bảng xếp hạng (đã triển khai)
 
@@ -298,7 +307,7 @@ Nghề chưa mở khóa vẫn hiện trên map kèm "(cần …)"; làm thử s�
 
 ### 6.8 Hạn chế đã biết của v0.2
 
-- Đánh quái bằng cách nhấn E liên tục (không có vũ khí, hoạt ảnh hay né tránh); quái không di chuyển.
+- Đánh quái bằng cách nhấn E liên tục (không có vũ khí, hoạt ảnh hay né tránh). *(Từ v0.7 quái đã di chuyển, xem 8c.1.)*
 - ProximityPrompt mặc định của Roblox **chỉ hiện khi prompt nằm trong tầm nhìn camera**; khi test bằng công cụ tự động phải quay camera về phía khối.
 - Phát hiện gian lận bảng xếp hạng chỉ dừng ở cảnh báo; chưa có cơ chế gỡ khỏi bảng.
 - Lưu/tải và OrderedDataStore **thật** chưa được kiểm chứng (cần publish place); logic đã được kiểm thử bằng DataStore giả.
@@ -328,17 +337,30 @@ Tài sản **không bao giờ thuộc về người chơi**: trả **giá thuê 
 
 | Tài sản | Loại | Giá thuê | Phí/chu kỳ | Nổi tiếng |
 | --- | --- | --- | --- | --- |
+| Xe đạp | xe | $150 | $2 | +3 |
 | Xe máy | xe | $800 | $8 | +15 |
-| Phòng trọ | nhà | $1.000 | $10 | +20 |
-| Căn hộ | nhà | $4.000 | $40 | +60 |
+| Xe tay ga | xe | $2.000 | $20 | +32 |
 | Ô tô | xe | $5.000 | $60 | +80 |
-| Biệt thự (hiếm, kho 3) | nhà | $20.000 | $200 | +250 |
+| Xe SUV | xe | $9.000 | $100 | +130 |
+| Xe sang | xe | $15.000 | $170 | +210 |
 | Xe thể thao (hiếm, kho 2) | xe | $30.000 | $300 | +400 |
+| Siêu xe (hiếm, kho 1) | xe | $60.000 | $600 | +900 |
+| Phòng trọ | nhà | $1.000 | $10 | +20 |
+| Nhà cấp bốn | nhà | $2.500 | $25 | +40 |
+| Căn hộ | nhà | $4.000 | $40 | +60 |
+| Nhà phố | nhà | $8.000 | $80 | +110 |
+| Nhà vườn | nhà | $12.000 | $120 | +160 |
+| Biệt thự (hiếm, kho 3) | nhà | $20.000 | $200 | +250 |
+| Dinh thự (hiếm, kho 1) | nhà | $50.000 | $500 | +700 |
 
+- **Bậc giá (v0.9):** 8 xe và 7 nhà, phí duy trì ≈ 1% giá thuê mỗi chu kỳ, đắt hơn thì Nổi tiếng cao hơn. Mỗi loại có model riêng, càng đắt càng nhiều chi tiết (`World/Props`); Khu tài sản AURA trưng bày tất cả, Khu dân cư hiện món đắt nhất mỗi người đang thuê nên "lên đời" là thấy ngay. Món rẻ nhất (Xe đạp $150) nằm trong tầm vài lượt làm đầu tiên để người mới sớm có thứ để khoe.
+- Vẫn thuê tối đa một cái mỗi loại; giữ nhiều món cùng lúc thì cộng dồn phí và Nổi tiếng. Giữ cả 11 món thường tốn $635 mỗi chu kỳ (≈ $3.800/giờ), tương đương thu nhập tối ưu ở level thấp, nên người chơi phải chọn.
+- Số liệu 9 món mới là đề xuất theo cùng tỉ lệ với 6 món cũ, chưa playtest.
 - Phí thực tế = phí gốc × **hệ số chính sách** (7.6), làm tròn.
 - **Không đủ tiền**: ghi nợ 1 chu kỳ và cảnh báo. Lần trả kế tiếp **trả bù** mọi chu kỳ đã nợ. Nợ **quá 3 chu kỳ** (`GraceCycles`) thì AURA **thu hồi**; không phạt thêm tiền.
 - **Trả lại** tài sản: không hoàn tiền (`ReturnRefundPercent = 0`).
 - **Tài sản hiếm** chỉ có qua đấu giá. Kho giới hạn **toàn cầu**: một registry trong DataStore `EqualSocial_AssetRegistry_S1`, nhận/trả bằng `UpdateAsync` nên không cấp trùng giữa các server. Studio không có DataStore thì dùng registry cục bộ (báo trong Báo cáo); server thật mà DataStore lỗi thì **từ chối**, không bao giờ tự rơi về cục bộ.
+- **Chủ vắng mặt lâu** (v0.5): registry lưu thời điểm "nhịp" gần nhất của mỗi chủ (`{ userId = os.time() }`). Chủ đang online gửi nhịp lúc vào game và mỗi chu kỳ AURA. Chủ không có nhịp quá **7 ngày** (`AssetRegistry.IdleSeconds`) thì không còn được tính là đang giữ: số còn lại tăng, đấu giá mở được, và khi có người nhận suất đó thì chủ cũ bị gỡ khỏi registry. Khi chủ cũ quay lại, AURA thu hồi tài sản trong dữ liệu của họ (toast "vắng mặt quá 7 ngày"). Nếu chưa ai nhận suất thì họ vẫn giữ. Registry lỗi thì không thu hồi.
 
 ### 7.3 Thuế lũy tiến
 
@@ -409,7 +431,7 @@ Số liệu ở `Config.Pvp`, `Config.Season`. Code: `PvpService`, `SeasonServic
 
 ### 8.1 Đấu trường 1v1
 
-- **Vị trí** (map placeholder): sàn đấu tâm (0, −125), hai bục cách tâm 14 studs theo trục X, quầy hàng chờ ở (0, −89). Map thật: gắn tag `ES_Arena` cho quầy và `ES_ArenaPad` + `PadIndex` = 1/2 cho hai bục; tâm đấu trường = trung điểm hai bục.
+- **Vị trí** (map dựng sẵn): sàn đấu tròn tâm (0, −125), hai bục cách tâm 14 studs theo trục X, quầy hàng chờ ở (0, −89). Map thật: gắn tag `ES_Arena` cho quầy và `ES_ArenaPad` + `PadIndex` = 1/2 cho hai bục; tâm đấu trường = trung điểm hai bục.
 - **Hàng chờ:** nhấn E ở quầy để vào, nhấn lần nữa để rời. Cần ≥ 20 Năng lượng.
 - **Ghép cặp theo điểm** (mỗi giây): duyệt theo thứ tự vào hàng chờ, mỗi người được ghép với người có điểm gần nhất mà chênh lệch ≤ 100 + 10 × số giây đã chờ (của người chờ lâu hơn). Ví dụ chênh 400 điểm thì sau 30 giây chờ mới được ghép. Map có một cặp bục nên **mỗi lúc chỉ một trận**; người khác chờ trận đang diễn ra kết thúc.
 - **Trận:** dịch chuyển lên hai bục, đếm ngược 3 giây, đánh 60 giây. **Máu PvP riêng** (100), không đụng tới máu nhân vật: thua không chết, không mất tiền.
@@ -448,13 +470,127 @@ Số liệu ở `Config.Pvp`, `Config.Season`. Code: `PvpService`, `SeasonServic
 
 - HUD: "Mùa 1 · còn 55 ngày · PvP 1000 điểm" và danh hiệu mới nhất. Sang mùa có toast chào mùa mới và toast cho từng danh hiệu.
 - **Cửa sổ Hồ sơ** (nút "Hồ sơ [P]" trên HUD hoặc phím P, mở ở bất cứ đâu): thành tích PvP và tài sản ròng cao nhất mùa này, mọi danh hiệu (mới nhất lên trước), lịch sử các mùa trước. Dữ liệu lấy qua `GetProfile` (chỉ hồ sơ của chính người gọi, 3 lần / 10 giây).
-- **Chưa làm:** cơ chế "bắt kịp" cho người vào giữa mùa, đêm chung kết, phần thưởng cosmetic cuối mùa, xem hồ sơ người khác.
+- **Bắt kịp giữa mùa** (v0.5): `Config.Season.StartsAt` = 11/11/2026. Người vào mùa muộn được **+10% XP mỗi tuần muộn**, tối đa **+50%**, chỉ trong **3 giờ chơi đầu** của mùa (`SeasonJoinedAt`, `SeasonPlaySeconds`, đều reset khi sang mùa). Chỉ thưởng XP, **không thưởng tiền**: người mới học nhanh hơn để mở nghề tốt hơn, nhưng không được cho tài sản. Có toast khi vào game và dòng trong cửa sổ Hồ sơ. Khi tăng `Season.Id` nhớ sửa cả `StartsAt`.
+- **Chưa làm:** đêm chung kết, phần thưởng cosmetic cuối mùa. *(Xem hồ sơ người khác: đã làm ở v0.7, mục 8c.3.)*
 
 ### 8.3 Monetization (cosmetic-only)
 
 - Bán bằng Robux: skin, bộ đồ, emote, hiệu ứng bước chân, khung tên, thú cưng *chỉ để trang trí*.
 - **Không** bán: tiền trong game, XP, kỹ năng, chỉ số, tài sản, thứ làm tăng thu nhập hay thắng PvP, hộp ngẫu nhiên có trả phí.
 - Cosmetic mua bằng Robux **không** cộng Nổi tiếng (Nổi tiếng chỉ đến từ tài sản mua bằng tiền game) để tiền thật không mua được địa vị trong cuộc cạnh tranh.
+
+**Đã làm (v0.5):**
+- **Bảng tên trên đầu nhân vật** cho mọi người (ẩn tên mặc định của Roblox): tên hiển thị + danh hiệu đang gắn.
+- **Bảng tên màu** (Vàng, Xanh neon, Hồng) bán bằng **Game Pass**. Roblox quản quyền sở hữu; server kiểm tra bằng `UserOwnsGamePassAsync` khi vào game và cập nhật ngay khi mua (`PromptGamePassPurchaseFinished`). Không lưu quyền sở hữu, không xử lý receipt. Bị hoàn tiền thì tự gỡ; lỗi mạng thì giữ nguyên.
+- **Gắn danh hiệu** miễn phí (chỉ danh hiệu đã nhận cuối mùa).
+- Lựa chọn (`Cosmetics`) giữ qua các mùa. Mua / dùng / gắn trong cửa sổ Hồ sơ (phím P).
+- `GamePassId = 0` (hiện tại): món hiện "Sắp ra mắt". **Để bán thật:** tạo Game Pass trong Creator Dashboard của experience rồi điền ID vào `Config.Cosmetics.Items[...].GamePassId`.
+
+## 8b. v0.6 — Thế giới, giao diện và hướng dẫn (đã triển khai)
+
+Code: `server/WorldBuilder`, `server/World/*`, `server/Util/MonsterModel`, `server/Services/GuideService`, client `Ambience` và `UI/*`. Số liệu ở `Config.World`, `Config.Ambience`, `Config.Calendar`, `Config.Guide`, `Config.UI`.
+
+### 8b.1 Thị trấn
+
+- **Phong cách:** low-poly màu phẳng, dựng hoàn toàn từ khối cơ bản bằng code. Không dùng asset ngoài nên không phụ thuộc kiểm duyệt hay quyền sở hữu asset, build ra là có map, và mọi thay đổi nằm trong git.
+- **Bố cục** (giữ nguyên toạ độ các khu của bản trước): quảng trường tròn bán kính 24 quanh điểm hồi sinh; bốn đường vòng cách tâm dãy nhà 17 studs; bốn lối nối quảng trường với đường vòng.
+
+| Hướng | Khu |
+| --- | --- |
+| Tây | dãy nghề: quán cà phê, văn phòng hai tầng, xưởng sửa chữa, kho hàng |
+| Đông | trạm nghỉ (nhà nghỉ có giường, ghế công viên, buồng tắm), Trụ sở AURA, Khu tài sản AURA, hồ nước |
+| Bắc | cửa hàng thời trang, quán ăn, rồi tới Đấu trường tròn có khán đài ba phía |
+| Nam | bảng xếp hạng, bốn lớp học, Bãi luyện tập có hàng rào, Bệnh xá (tây nam) |
+
+- **Điểm tương tác** là một đồ vật trước công trình (quầy, bàn làm việc, thùng hàng, nệm...) mang tag + attribute; nhãn nổi ghi tên và phím. Thêm mục mới trong Config mà chưa có kiểu nhà riêng thì dùng kiểu nhà mặc định.
+- **Khu tài sản AURA** trưng bày mọi mục trong `Config.Assets` (nhà một hàng, xe trên bục) kèm bảng giá thuê, phí và Nổi tiếng; tài sản hiếm ghi "Chỉ qua đấu giá". Chỉ để ngắm, thuê vẫn ở Trụ sở. Đây là bước đầu cho trụ cột "khoe được thành quả"; tài sản của từng người chưa hiện trong thế giới (xem câu hỏi 24).
+- **Ranh giới:** tường vô hình ở mép vùng chơi 320 × 320; bên ngoài là thảm cỏ, vành rừng và đồi thấp cho có đường chân trời.
+- **Quái:** Slime Kẹo (thân thạch trong, lõi sáng, que kẹo) và Gấu Bông (đầu, tai, mõm, tay chân, miếng vá). Vẫn đứng yên, luật không đổi.
+- **Thay bằng map riêng:** đặt một thư mục `World` trong Workspace và gắn tag như bảng trong CLAUDE.md; khi đó WorldBuilder, ánh sáng và ngày đêm dựng sẵn đều không chạy.
+
+### 8b.2 Ngày đêm (chỉ hiển thị)
+
+- Giờ trời suy ra từ giờ server như lịch (6.1), nên mọi người thấy cùng một bầu trời. **Ngày game bắt đầu lúc 6 giờ sáng**; 75% đầu của ngày (7,5 phút) là ban ngày, 25% còn lại (2,5 phút) là đêm.
+- Đêm cố ý ngắn và sáng (ánh sáng môi trường cao) vì tối quá làm khó nhìn nhãn và quái. Đèn đường bật khi trời tối; bảng xếp hạng và biển AURA tự sáng.
+- **Không ảnh hưởng luật chơi**: lớp học, thuế, sự kiện vẫn theo ngày và chu kỳ như cũ.
+
+### 8b.3 Giao diện
+
+- HUD là một cột thẻ ở góc trên phải (góc trái là cửa sổ chat; danh sách người chơi mặc định của Roblox được tắt vì game có bảng xếp hạng riêng): ví (tiền, hạng, tài sản ròng, Nổi tiếng), thông tin (ngày, mùa, AURA, nút Hồ sơ), nhiệm vụ hướng dẫn, chỉ số (lưới 2 cột), kỹ năng (bấm tiêu đề để thu gọn).
+- Toàn bộ UI co theo chiều cao màn hình: tỉ lệ = cao / 720, trong khoảng 0,62–1,15; màn hình thấp hơn 640 thì kỹ năng thu gọn sẵn.
+- Trạng thái Đấu trường hiện thành dải ở giữa phía trên. Bốn cửa sổ dùng chung thanh tiêu đề, mỗi cửa sổ một màu nhấn (cửa hàng xanh dương, xếp hạng vàng, AURA tím, hồ sơ xanh lá).
+
+### 8b.4 Hướng dẫn người mới
+
+Sáu bước, làm **theo thứ tự**, mỗi bước xong có toast và HUD hiện bước kế:
+
+| Bước | Việc | Tính khi |
+| --- | --- | --- |
+| 1 | Làm một lượt việc | có giao dịch lý do `job` |
+| 2 | Mua một món ở cửa hàng | giao dịch `shop` |
+| 3 | Nghỉ ở một trạm miễn phí | dùng trạm thành công (hết cooldown) |
+| 4 | Học một buổi | giao dịch `school` |
+| 5 | Hạ một con quái | giao dịch `monster` |
+| 6 | Ghé Trụ sở AURA | mở cửa sổ AURA |
+
+- **Không có phần thưởng** (tiền, XP hay Nổi tiếng): hướng dẫn chỉ chỉ đường, giữ trụ cột bình đẳng xuất phát.
+- Tiến độ (`data.Guide.Step`) chỉ server ghi, **giữ qua các mùa** (người cũ không phải làm lại). Người chơi có dữ liệu từ trước v0.6 bắt đầu ở bước 1.
+- Làm sai thứ tự không tính; ví dụ hạ quái trước khi học thì sau đó vẫn phải hạ thêm một con ở bước 5.
+
+### 8b.5 Nổi tiếng trên bảng tên
+
+Bảng tên trên đầu nhân vật có thêm dòng "Nổi tiếng N" (ẩn khi N = 0), cập nhật ngay khi mua đồ, thuê, trả hoặc bị thu hồi tài sản. Đây là câu trả lời tối thiểu cho câu hỏi 7: Nổi tiếng trở thành thứ người khác nhìn thấy, chưa mở khóa quyền lợi nào.
+
+### 8b.6 Hạn chế đã biết của v0.6
+
+- *(v0.7 đã thêm âm thanh và số bay, xem 8c.)* Chưa có nhạc nền và hoạt ảnh làm việc.
+- Không vào được bên trong công trình (nhà là khối đặc, tương tác ở mặt tiền).
+- Chưa đo hiệu năng trên máy yếu / điện thoại; map khoảng vài nghìn khối tĩnh.
+- Hướng dẫn chưa có mũi tên chỉ đường trong thế giới, chỉ có chữ kèm phương hướng.
+
+## 8c. v0.7 — Quái di chuyển, phản hồi tức thời, hồ sơ công khai (đã triển khai)
+
+Số liệu ở `Config.Combat` (AggroRadius, LeashRadius, StopDistance), `Config.Monsters[...].MoveSpeed`, `Config.Sounds`, `Config.Effects`. Code: `CombatService`, `Util/MonsterModel`, `ReplicationService:Effect`, `SeasonService:GetPublicProfile`, client `Effects` và `UI/ProfileWindow`.
+
+### 8c.1 Quái di chuyển (trả lời một phần câu hỏi 20)
+
+| Thông số | Giá trị |
+| --- | --- |
+| Tầm phát hiện (tính từ chỗ xuất hiện) | 24 studs |
+| Xa chỗ xuất hiện tối đa | 7 studs |
+| Dừng khi còn cách mục tiêu | 5 studs |
+| Tốc độ Slime Kẹo / Gấu Bông | 7 / 4,5 studs mỗi giây |
+
+- Mỗi tick (0,5 giây) quái chọn người chơi còn sống gần chỗ xuất hiện nhất trong tầm phát hiện và trượt một bước về phía họ; không còn ai thì quay về. `MoveSpeed` bỏ trống hoặc bằng 0 thì quái đứng yên như trước.
+- Dây xích ngắn (7 studs) là có chủ ý: người chơi luôn thoát được bằng cách lùi ra, quái không kéo nhau ra khỏi bãi, và tầm đánh 11 studs của quái vẫn như cũ nên độ khó tăng nhẹ chứ không đổi cân bằng thu nhập.
+- Tầm đánh của cả hai bên tính theo vị trí hiện tại của quái. Thưởng, chia thưởng, trần tiền không đổi.
+- Còn mở: quái mạnh dần / thưởng theo cấp bãi (câu hỏi 20), né tránh và vũ khí (câu hỏi 19).
+
+### 8c.2 Số bay và âm thanh
+
+- Server gửi `Effect(kind, value, position?)` cho **riêng** người chơi: `money` (mọi giao dịch của EconomyService, có dấu), `hit` (đòn mình đánh trúng quái hoặc đối thủ PvP, kèm vị trí), `hurt` (mình bị quái hoặc đối thủ đánh).
+- Client vẽ số bay và phát âm thanh; bỏ lỡ hiệu ứng không ảnh hưởng dữ liệu vì trạng thái thật vẫn đi qua snapshot. Tối đa 12 số bay cùng lúc.
+- Âm thanh dùng file có sẵn trong client Roblox nên không phụ thuộc kiểm duyệt asset. Toast loại lên cấp và cảnh báo có tiếng riêng. Nút trên HUD tắt toàn bộ âm thanh (chỉ trong phiên chơi, chưa lưu).
+- **Nhạc nền:** có sẵn trình phát lần lượt các bài trong `Config.Sounds.Music.Tracks`, mặc định để trống vì cần id audio mà chủ game có quyền dùng.
+
+### 8c.3 Hồ sơ công khai
+
+- Cửa sổ Hồ sơ liệt kê người chơi cùng máy chủ; "Xem" gọi `GetPlayerProfile(userId)`.
+- **Công khai:** tên, danh hiệu đang gắn và mọi danh hiệu, tài sản ròng, hạng, Nổi tiếng, thành tích PvP mùa này, tài sản ròng cao nhất, tên tài sản đang thuê, tên đồ sở hữu.
+- **Không công khai:** tiền mặt, chỉ số, kỹ năng, lịch sử các mùa, tiến độ hướng dẫn.
+- Chỉ xem được người **đang online cùng máy chủ** (server không đọc DataStore theo yêu cầu của client), 4 lần / 10 giây.
+- Đây là bước tiếp theo cho trụ cột "khoe được thành quả" và câu hỏi 7, 24: tài sản thuê giờ là thứ người khác xem được. Từ v0.8 tài sản còn hiện thành nhà và xe trên lô đất riêng (mục 8d).
+
+## 8d. v0.8 — Khu dân cư (đã triển khai)
+
+Số liệu ở `Config.World.ResidenceOrigin` và `Config.World.Plot`. Code: `EstateService`, `Util/EstateModel`, `World/Landmarks.Residences`.
+
+- **Vị trí:** dãy 8 lô ở phía tây, sau dãy nghề (tâm (−120, 0), các lô cách nhau 36 studs dọc trục Z, mặt quay về thị trấn). Lối vào là lối lát đi qua khe giữa hai nhà nghề ở z = 0, có cổng "KHU DÂN CƯ".
+- **Gán lô:** khi dữ liệu tải xong, người chơi nhận lô trống có số nhỏ nhất và có toast báo số lô. Rời game thì trả lô. Lô **không lưu**: mỗi lần vào có thể nhận lô khác.
+- **Hiển thị:** ngôi nhà đắt nhất và chiếc xe đắt nhất đang thuê (mỗi loại một cái), cùng biển "Nhà của <tên>" và tên tài sản. Chưa thuê gì thì biển ghi "Chưa thuê nhà hay xe". Thuê, trả, thắng đấu giá hay bị thu hồi thì lô dựng lại ngay (chỉ khi nhà / xe hiển thị đổi).
+- **Hết lô:** người thứ 9 trở đi không có lô, có thông báo, và nhận lô khi có người rời. `Plot.Count` nên bằng số người chơi tối đa của server; hiện là 8.
+- **Chỉ để khoe** (trụ cột 4): lô không cho tiền, chỉ số, Nổi tiếng hay chỗ nghỉ; không vào được trong nhà, không lái được xe. Không có Remote nào nên client không tác động được.
+- Trả lời câu hỏi 24 ở mức "nhìn thấy được"; công dụng thật của nhà / xe (giường riêng, đi nhanh hơn) vẫn để mở vì ảnh hưởng cân bằng.
 
 ## 9. Ràng buộc nội dung (Roblox Community Standards)
 
@@ -469,10 +605,10 @@ Số liệu ở `Config.Pvp`, `Config.Season`. Code: `PvpService`, `SeasonServic
 1. **Trạm miễn phí quá mạnh?** *(Đã chốt: cooldown riêng mỗi người cho từng trạm, xem 4.7.)* Còn mở: có nên thêm trạm trả phí (khách sạn, spa) cho người muốn hồi nhanh hơn, như một khoản hút tiền?
 2. **Nhịp thời gian.** Chỉ số tụt hết trong 35–70 phút thực. Với người chơi phiên ngắn (10–15 phút), chỉ số hầu như không đổi. Có cần "thời gian trôi nhanh hơn" hoặc tách thời gian ngoại tuyến?
 3. **Chỉ số khi ngoại tuyến.** MVP lưu nguyên chỉ số lúc rời game. Có nên tụt nhẹ theo thời gian vắng mặt (và giới hạn mức tụt) để tránh bỏ game sạch nhưng vẫn không quá phạt?
-4. **Xuất phát thật sự công bằng?** Level kỹ năng bắt đầu 0 ở mọi người. Người chơi vào giữa mùa cần bắt kịp thế nào mà không phá cảm giác công bằng (đường tắt học nhanh, thưởng "người mới")?
+4. **Xuất phát thật sự công bằng?** *(Đã làm: thưởng XP bắt kịp, xem 8.2.)* Còn mở: mức +10%/tuần, tối đa +50% trong 3 giờ có đủ không, có nên giảm học phí cho người vào muộn?
 5. **Cân bằng nghề.** Hai nghề hiện chỉ khác lương/chi phí. Làm sao để mỗi nghề có "cá tính" (rủi ro, nhịp, tương tác xã hội) thay vì chỉ là con số?
-6. **Tương tác người chơi.** Ngoài bảng xếp hạng và PvP, MVP chưa có tương tác trực tiếp. Có nên thêm hợp tác (làm chung ca kho hàng cho thưởng cao), thương mại giữa người chơi, hay hội nhóm?
-7. **Giá trị của Nổi tiếng.** Hiện chỉ là con số hiển thị. Nổi tiếng nên mở khóa gì (cửa hàng cao cấp, nghề, vị trí trên bảng) mà không tạo lợi thế kiếm tiền quá lớn?
+6. **Tương tác người chơi.** *(Đã làm: làm ca chung, xem 4.6.)* Còn mở: thương mại giữa người chơi (cần giải quyết đa tài khoản trước) và hội nhóm.
+7. **Giá trị của Nổi tiếng.** *(Đã làm một phần: hiện trên bảng tên, xem 8b.5.)* Ngoài ra vẫn chỉ là con số hiển thị. Nổi tiếng nên mở khóa gì (cửa hàng cao cấp, nghề, vị trí trên bảng) mà không tạo lợi thế kiếm tiền quá lớn?
 8. **Nổi tiếng và đồ thuê.** Với v0.3, nhà/xe thuê có cộng Nổi tiếng không? Nếu đồ thuê bị thu hồi thì Nổi tiếng giảm lại, có gây cảm giác bị phạt quá nặng không?
 9. **Cơ chế thu hồi.** Ân hạn bao lâu là hợp lý? Có cho "cứu" bằng khoản vay từ AURA (có lãi) hay không?
 10. **Thuế tính trên gì.** Tài sản ròng (khuyến khích chi tiêu) hay thu nhập (khuyến khích tích lũy)? Người chơi cố ý "giấu" tài sản bằng cách mua đồ sở hữu vĩnh viễn thì xử lý ra sao?
@@ -485,11 +621,11 @@ Số liệu ở `Config.Pvp`, `Config.Season`. Code: `PvpService`, `SeasonServic
 17. **Tên game.** "Equal Social" chỉ là tên tạm.
 18. **Trần tiền từ quái ($5.000/giờ).** Nghề không có trần nên trần này chỉ chặn quái thành nguồn thu vô hạn. Con số phù hợp là bao nhiêu? Có nên đặt trần chung cho mọi nguồn thu thay vì riêng quái?
 19. **Điều khiển đánh quái.** Hiện chỉ nhấn E nên "kỹ năng điều khiển" gần như không có. Có đáng làm vũ khí/né tránh (Tool, hoạt ảnh) hay giữ đơn giản và để chỉ số/kỹ năng quyết định?
-20. **Quái đứng yên và thưởng cố định.** Người chơi Lv cao hạ quái trong 1–3 đòn. Cần quái mạnh dần, quái di chuyển hoặc thưởng tăng theo cấp bãi luyện tập?
+20. **Quái đứng yên và thưởng cố định.** *(Đã làm một phần: quái đuổi theo trong phạm vi ngắn, xem 8c.1.)* Người chơi Lv cao hạ quái trong 1–3 đòn. Cần quái mạnh dần, quái di chuyển hoặc thưởng tăng theo cấp bãi luyện tập?
 21. **Học phí cao ở level cao.** Lv20 tốn ≈ $25.640 qua trường học, làm nghề thì miễn phí nhưng chậm hơn khoảng 2 lần. Đây có phải đánh đổi mong muốn, hay cần giảm hệ số học phí?
 22. **Lịch lớp học.** Lớp chỉ mở 3–4 ngày/tuần (70 phút thực/tuần). Người chơi vào sai ngày có thấy bị chặn không? Có cần hiện đếm ngược tới ngày lớp mở?
 23. **Gian lận bảng xếp hạng.** Hiện chỉ ghi cảnh báo. Khi nào cần cơ chế gỡ người chơi khỏi bảng hoặc khoá tài khoản nghi vấn?
-24. **Tài sản có công dụng không?** Nhà/xe v0.3 chỉ cho Nổi tiếng và tài sản ròng. Có nên thêm công dụng (giường riêng, đi nhanh hơn) mà không tạo lợi thế kiếm tiền quá lớn?
-25. **Phí ngoại tuyến và tài sản hiếm bị bỏ quên.** Không tính phí ngoại tuyến nên người bỏ game giữ tài sản hiếm mãi. Có cần cơ chế thu hồi sau X ngày vắng mặt trước khi có Season?
+24. **Tài sản có công dụng không?** *(Đã làm phần hiển thị: nhà và xe hiện trên lô riêng, xem 8d.)* Nhà/xe v0.3 chỉ cho Nổi tiếng và tài sản ròng. Có nên thêm công dụng (giường riêng, đi nhanh hơn) mà không tạo lợi thế kiếm tiền quá lớn?
+25. **Phí ngoại tuyến và tài sản hiếm bị bỏ quên.** *(Đã làm: suất của chủ vắng mặt quá 7 ngày được nhường khi có người nhận, xem 7.2.)* Còn mở: tài sản thường của người bỏ game không bị thu hồi (không chiếm kho nên chấp nhận).
 26. **AURA theo từng server.** Hệ số chính sách khác nhau giữa server. Có cần đồng bộ (MessagingService / MemoryStore)?
 27. **Mục tiêu tiền trung bình $5.000** có phù hợp không? Sau cooldown trạm thu nhập Lv0 ≈ $1.700–4.000/giờ (xem 4.7, 7.7); cần số liệu từ người chơi thật để chỉnh.

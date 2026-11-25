@@ -110,6 +110,7 @@ function StationService:_use(player: Player, stationId: string, station: Station
 	end
 	data.StationUsed[stationId] = os.time()
 	services.Replication:Notify(player, station.DoneText, "success")
+	services.Guide:Report(player, "station")
 end
 
 return StationService

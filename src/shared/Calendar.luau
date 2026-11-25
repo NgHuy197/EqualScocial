@@ -24,6 +24,19 @@ function Calendar.DayName(weekday: number): string
 	return Config.Calendar.DayNames[weekday] or "?"
 end
 
+-- Giờ trong ngày (0..24) để vẽ trời sáng / tối. Ngày game bắt đầu lúc SunriseHour; DaylightFraction đầu
+-- của ngày trải đều từ lúc mọc tới lúc lặn, phần còn lại là đêm. Chỉ để hiển thị.
+function Calendar.GetClockTime(serverTime: number): number
+	local calendar = Config.Calendar
+	local fraction = (serverTime % calendar.DayLengthSeconds) / calendar.DayLengthSeconds
+	local dayHours = calendar.SunsetHour - calendar.SunriseHour
+	if fraction < calendar.DaylightFraction then
+		return calendar.SunriseHour + dayHours * fraction / calendar.DaylightFraction
+	end
+	local night = (fraction - calendar.DaylightFraction) / (1 - calendar.DaylightFraction)
+	return (calendar.SunsetHour + (24 - dayHours) * night) % 24
+end
+
 -- Lớp có mở cửa vào ngày hiện tại không? `openDays` là danh sách thứ (1..7)
 function Calendar.IsOpen(openDays: { number }, serverTime: number): boolean
 	return table.find(openDays, Calendar.GetWeekday(serverTime)) ~= nil

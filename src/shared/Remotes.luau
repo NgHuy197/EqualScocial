@@ -25,6 +25,8 @@ local WAIT_TIMEOUT = 30
 --   OpenAura()              : mở cửa sổ Trụ sở AURA sau khi ProximityPrompt kích hoạt
 --   AuraUpdate(auraState)   : trạng thái chung của AURA (sự kiện, đấu giá, hệ số...) cho mọi người chơi
 --   PvpUpdate(pvpState)     : trạng thái đấu trường của riêng người chơi (Types.PvpState)
+--   Effect(kind, value, position?) : hiệu ứng tức thời cho riêng người chơi (số bay + âm thanh):
+--                             "money" (tiền đổi), "hit" (đòn mình đánh trúng), "hurt" (mình bị đánh)
 -- Client -> Server (không trả về)
 --   PvpAttack()             : đánh đối thủ trong trận PvP (server tự biết mục tiêu)
 local EVENTS = {
@@ -36,6 +38,7 @@ local EVENTS = {
 	"AuraUpdate",
 	"PvpUpdate",
 	"PvpAttack",
+	"Effect",
 }
 
 -- Client -> Server (có trả về)
@@ -47,6 +50,10 @@ local EVENTS = {
 --   AssetReturn(assetId)          -> ok: boolean, message: string
 --   AuctionBid(amount)            -> ok: boolean, message: string
 --   GetProfile()                  -> Types.ProfileView của chính người gọi (nil nếu bị rate-limit)
+--   EquipCosmetic(id)             -> ok, message ("" = bỏ bảng tên màu)
+--   EquipTitle(title)             -> ok, message ("" = gỡ danh hiệu)
+--   GetPlayerProfile(userId)      -> Types.PublicProfileView của một người ĐANG ở cùng máy chủ (nil nếu
+--                                    không hợp lệ / bị rate-limit); chỉ gồm thông tin công khai
 local FUNCTIONS = {
 	"GetState",
 	"ShopBuy",
@@ -56,6 +63,9 @@ local FUNCTIONS = {
 	"AssetReturn",
 	"AuctionBid",
 	"GetProfile",
+	"EquipCosmetic",
+	"EquipTitle",
+	"GetPlayerProfile",
 }
 
 local Remotes = {}
